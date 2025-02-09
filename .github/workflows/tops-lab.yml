@@ -5,7 +5,9 @@ on:
     branches:
       - main
       - dev
-  workflow_dispatch:  # Allows manual triggering
+    paths:
+      - "lab/**" 
+  workflow_dispatch:
 
 permissions:
   contents: read

@@ -3,7 +3,9 @@
 **These are unusable outside of UDF -- they rely on the UDF metadata service.**
 
 ## tops-lab
-This is the base service for all UDF labs.
+This is the base service for all F5XC UDF labs.
+The service kicks off automation to provision a user and F5XC resources in a target tenant.
+These resources will remain in the tenant for the lifecycle of the UDF deployment + 5 minutes. 
 
 ### Actions performed
 - [X] Pulls Deployment info from the UDF metadata service
