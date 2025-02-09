@@ -42,8 +42,8 @@ def fetch_metadata():
     """Fetch and structure metadata, retrying until the service is available."""
     for attempt in range(MAX_RETRIES):
         try:
-            dep_id = requests.get(f"{METADATA_BASE_URL}/deployment/id/", timeout=5)
-            lab_id = requests.get(f"{METADATA_BASE_URL}/userTags/name/labid/value/", timeout=5)
+            dep_id = requests.get(f"{METADATA_BASE_URL}/deployment/id/", timeout=5).json()
+            lab_id = requests.get(f"{METADATA_BASE_URL}/userTags/name/labid/value/", timeout=5).json()
             aws_creds = requests.get(f"{METADATA_BASE_URL}/cloudAccounts", timeout=5).json()
 
             return {
