@@ -1,6 +1,6 @@
 # F5xc UDF Lab Services
 
-**These are unusable outside of UDF -- they rely on the UDF metadata service.**
+**These services unusable outside of the F5 Universal Demo Framework (UDF) as they rely on the UDF metadata service.**
 
 ## tops-lab
 This is the base service for all F5XC UDF labs.
