@@ -6,17 +6,15 @@
 This is the base service for all UDF labs.
 
 ### Actions performed
-✅ Pulls Deployment info from the UDF metadata service
-✅ Pulls Lab info from a f5xc-tenantOps S3 bucket
-✅ Creates a petname
-✅ Writes a state file for continuity between deployment start/stops
-✅ Sends an SQS message to kick off account and resource provisioning in F5XC
-✅ Continues sending SQSs to signify the deployment is active
+- [X] Pulls Deployment info from the UDF metadata service
+- [X] Pulls Lab info from a f5xc-tenantOps S3 bucket
+- [X] Creates a petname
+- [X] Writes a state file for continuity between deployment start/stops
+- [X] Sends an SQS message to kick off account and resource provisioning in F5XC
+- [X] Continues sending SQSs to signify the deployment is active
 
 ### Requirements
-The UDF deployment's "runner" instance must be must be tagged with:
-- [ ]  xc = "runner"
-- [ ] labid = short UID of this lab
+The UDF deployment's "runner" instance must be must be tagged:
 
 <img src="./images/tags.png" alt="tags" width="512"/>
 
