@@ -69,7 +69,7 @@ def get_lab_info(metadata):
             aws_secret_access_key=metadata["awsSecret"]
         )
 
-        obj = client.get_object(Bucket=LAB_INFO_BUCKET, Key=f"{metadata['labID']}.yml")
+        obj = client.get_object(Bucket=LAB_INFO_BUCKET, Key=f"{metadata['labID']}.yaml")
         data = obj['Body'].read().decode('utf-8')
         return yaml.safe_load(data)
     except boto3.exceptions.Boto3Error as e:
