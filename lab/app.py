@@ -72,7 +72,7 @@ def get_lab_info(metadata):
         obj = client.get_object(Bucket=LAB_INFO_BUCKET, Key=f"{metadata['labID']}.yaml")
         data = obj['Body'].read().decode('utf-8')
         return yaml.safe_load(data)
-    except boto3.exceptions.Boto3Error as e:
+    except Exception as e:
         print(f"Error retrieving lab info from S3 ({LAB_INFO_BUCKET}): {e}")
         return None
 
@@ -90,7 +90,7 @@ def send_sqs(meta):
             response = sqs.send_message(QueueUrl=meta["sqsURL"], MessageBody=json.dumps(meta))
             print(f"SQS message sent: {response['MessageId']}")
             return True
-        except boto3.exceptions.Boto3Error as e:
+        except Exception as e:
             print(f"SQS send attempt {attempt + 1} failed: {e}")
             time.sleep(RETRY_DELAY)
 
@@ -103,6 +103,7 @@ def main():
     if not metadata:
         return
 
+    print(f"Metadata fetched: {metadata}")
     lab_info = get_lab_info(metadata)
     if not lab_info or "sqsURL" not in lab_info:
         print("Lab info missing or SQS URL not found. Exiting.")
