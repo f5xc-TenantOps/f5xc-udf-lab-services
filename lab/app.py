@@ -1,3 +1,4 @@
+"""tops-lab -- base service for F5XC UDF labs."""
 import os
 import sys
 import time
@@ -41,20 +42,20 @@ def fetch_metadata():
     """Fetch and structure metadata, retrying until the service is available."""
     for attempt in range(MAX_RETRIES):
         try:
-            deployment = requests.get(f"{METADATA_BASE_URL}/deployment", timeout=5).json()
+            dep_id = requests.get(f"{METADATA_BASE_URL}/deployment/id/", timeout=5)
+            lab_id = requests.get(f"{METADATA_BASE_URL}/userTags/name/labid/value/", timeout=5)
             aws_creds = requests.get(f"{METADATA_BASE_URL}/cloudAccounts", timeout=5).json()
-            runner_tags = requests.get(f"{METADATA_BASE_URL}/userTags/name/XC/value/runner", timeout=5).json()
 
             return {
-                "depID": deployment["deployment"]["id"],
-                "labID": runner_tags["userTags"][0]["value"],
+                "depID": dep_id,
+                "labID": lab_id,
                 "awsKey": aws_creds["cloudAccounts"][0]["credentials"][0]["key"],
                 "awsSecret": aws_creds["cloudAccounts"][0]["credentials"][0]["secret"],
             }
         except (requests.RequestException, KeyError, IndexError) as e:
             print(f"Metadata fetch attempt {attempt + 1} failed: {e}")
             time.sleep(RETRY_DELAY)
-    
+
     print("Metadata service unavailable after retries. Exiting.")
     return None
 
@@ -71,7 +72,7 @@ def get_lab_info(metadata):
         obj = client.get_object(Bucket=LAB_INFO_BUCKET, Key=f"{metadata['labID']}.yml")
         data = obj['Body'].read().decode('utf-8')
         return yaml.safe_load(data)
-    except Exception as e:
+    except boto3.exceptions.Boto3Error as e:
         print(f"Error retrieving lab info from S3 ({LAB_INFO_BUCKET}): {e}")
         return None
 
@@ -92,7 +93,7 @@ def send_sqs(meta):
         except boto3.exceptions.Boto3Error as e:
             print(f"SQS send attempt {attempt + 1} failed: {e}")
             time.sleep(RETRY_DELAY)
-    
+
     print("Failed to send SQS message after retries.")
     return False
 
@@ -115,7 +116,7 @@ def main():
         metadata["petname"] = previous_state["petname"]
     else:
         metadata["petname"] = petname.Generate()
-        save_state(metadata) 
+        save_state(metadata)
 
     while True:
         send_sqs(metadata)
