@@ -45,7 +45,7 @@ def fetch_metadata():
         try:
             dep_id = requests.get(f"{METADATA_BASE_URL}/deployment/id/", timeout=5).text.strip()
             lab_id = requests.get(f"{METADATA_BASE_URL}/userTags/name/labid/value/", timeout=5).text.strip()
-            email = requests.get(f"{METADATA_BASE_URL}/userTags/name/email/value/", timeout=5).text.strip()
+            email = requests.get(f"{METADATA_BASE_URL}/deployment/deployer/", timeout=5).text.strip()
             aws_creds = requests.get(f"{METADATA_BASE_URL}/cloudAccounts", timeout=5).json()
 
             return {
