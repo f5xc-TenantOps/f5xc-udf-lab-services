@@ -13,6 +13,7 @@ METADATA_BASE_URL = "http://metadata.udf"
 MAX_RETRIES = 10
 RETRY_DELAY = 6
 SQS_INTERVAL = 90
+MAX_SQS_RETRIES = 3
 
 LAB_INFO_BUCKET = os.getenv("LAB_INFO_BUCKET")
 
@@ -77,7 +78,7 @@ def get_lab_info(metadata):
         return None
 
 def send_sqs(meta):
-    """Send metadata to SQS, retrying if necessary."""
+    """Send metadata to SQS, failing after 3 unsuccessful attempts."""
     sqs = boto3.client(
         'sqs', 
         region_name=meta["sqsRegion"],
@@ -85,17 +86,20 @@ def send_sqs(meta):
         aws_secret_access_key=meta["awsSecret"]
     )
 
-    for attempt in range(MAX_RETRIES):
+    failed_attempts = 0
+
+    while failed_attempts < MAX_SQS_RETRIES:
         try:
             response = sqs.send_message(QueueUrl=meta["sqsURL"], MessageBody=json.dumps(meta))
             print(f"SQS message sent: {response['MessageId']}")
-            return True
+            return True  # Successfully sent, reset failure counter
         except Exception as e:
-            print(f"SQS send attempt {attempt + 1} failed: {e}")
+            failed_attempts += 1
+            print(f"SQS send attempt {failed_attempts} failed: {e}")
             time.sleep(RETRY_DELAY)
 
-    print("Failed to send SQS message after retries.")
-    return False
+    print(f"SQS message failed {MAX_SQS_RETRIES} times. Exiting.")
+    sys.exit(1)
 
 def main():
     """Main function."""
