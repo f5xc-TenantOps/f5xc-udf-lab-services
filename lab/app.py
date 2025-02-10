@@ -45,11 +45,13 @@ def fetch_metadata():
         try:
             dep_id = requests.get(f"{METADATA_BASE_URL}/deployment/id/", timeout=5).text.strip()
             lab_id = requests.get(f"{METADATA_BASE_URL}/userTags/name/labid/value/", timeout=5).text.strip()
+            email = requests.get(f"{METADATA_BASE_URL}/userTags/name/email/value/", timeout=5).text.strip()
             aws_creds = requests.get(f"{METADATA_BASE_URL}/cloudAccounts", timeout=5).json()
 
             return {
                 "depID": dep_id,
                 "labID": lab_id,
+                "email": email,
                 "awsKey": aws_creds["cloudAccounts"][0]["credentials"][0]["key"],
                 "awsSecret": aws_creds["cloudAccounts"][0]["credentials"][0]["secret"],
             }
@@ -78,7 +80,7 @@ def get_lab_info(metadata):
         return None
 
 def send_sqs(meta):
-    """Send metadata to SQS, failing after 3 unsuccessful attempts."""
+    """Send only labID, depID, email, and petname to SQS. Fails after 3 unsuccessful attempts."""
     sqs = boto3.client(
         'sqs', 
         region_name=meta["sqsRegion"],
@@ -86,20 +88,27 @@ def send_sqs(meta):
         aws_secret_access_key=meta["awsSecret"]
     )
 
-    failed_attempts = 0
+    sqs_payload = {
+        "labID": meta["labID"],
+        "depID": meta["depID"],
+        "email": meta["email"],
+        "petname": meta["petname"]
+    }
+
+    failed_attempts = 0 
 
     while failed_attempts < MAX_SQS_RETRIES:
         try:
-            response = sqs.send_message(QueueUrl=meta["sqsURL"], MessageBody=json.dumps(meta))
+            response = sqs.send_message(QueueUrl=meta["sqsURL"], MessageBody=json.dumps(sqs_payload))
             print(f"SQS message sent: {response['MessageId']}")
-            return True  # Successfully sent, reset failure counter
+            return True 
         except Exception as e:
             failed_attempts += 1
             print(f"SQS send attempt {failed_attempts} failed: {e}")
             time.sleep(RETRY_DELAY)
 
     print(f"SQS message failed {MAX_SQS_RETRIES} times. Exiting.")
-    sys.exit(1)
+    sys.exit(1) 
 
 def main():
     """Main function."""
