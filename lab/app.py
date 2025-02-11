@@ -89,8 +89,8 @@ def send_sqs(meta):
     )
 
     sqs_payload = {
-        "labID": meta["labID"],
-        "depID": meta["depID"],
+        "lab_id": meta["labID"],
+        "dep_id": meta["depID"],
         "email": meta["email"],
         "petname": meta["petname"]
     }
