@@ -13,6 +13,7 @@ METADATA_BASE_URL = "http://metadata.udf"
 MAX_RETRIES = 10
 RETRY_DELAY = 6
 SQS_INTERVAL = 90
+MAX_SQS_RETRIES = 3
 
 LAB_INFO_BUCKET = os.getenv("LAB_INFO_BUCKET")
 
@@ -42,13 +43,15 @@ def fetch_metadata():
     """Fetch and structure metadata, retrying until the service is available."""
     for attempt in range(MAX_RETRIES):
         try:
-            dep_id = requests.get(f"{METADATA_BASE_URL}/deployment/id/", timeout=5)
-            lab_id = requests.get(f"{METADATA_BASE_URL}/userTags/name/labid/value/", timeout=5)
+            dep_id = requests.get(f"{METADATA_BASE_URL}/deployment/id/", timeout=5).text.strip()
+            lab_id = requests.get(f"{METADATA_BASE_URL}/userTags/name/labid/value/", timeout=5).text.strip()
+            email = requests.get(f"{METADATA_BASE_URL}/deployment/deployer/", timeout=5).text.strip()
             aws_creds = requests.get(f"{METADATA_BASE_URL}/cloudAccounts", timeout=5).json()
 
             return {
                 "depID": dep_id,
                 "labID": lab_id,
+                "email": email,
                 "awsKey": aws_creds["cloudAccounts"][0]["credentials"][0]["key"],
                 "awsSecret": aws_creds["cloudAccounts"][0]["credentials"][0]["secret"],
             }
@@ -69,15 +72,15 @@ def get_lab_info(metadata):
             aws_secret_access_key=metadata["awsSecret"]
         )
 
-        obj = client.get_object(Bucket=LAB_INFO_BUCKET, Key=f"{metadata['labID']}.yml")
+        obj = client.get_object(Bucket=LAB_INFO_BUCKET, Key=f"{metadata['labID']}.yaml")
         data = obj['Body'].read().decode('utf-8')
         return yaml.safe_load(data)
-    except boto3.exceptions.Boto3Error as e:
+    except Exception as e:
         print(f"Error retrieving lab info from S3 ({LAB_INFO_BUCKET}): {e}")
         return None
 
 def send_sqs(meta):
-    """Send metadata to SQS, retrying if necessary."""
+    """Send only labID, depID, email, and petname to SQS. Fails after 3 unsuccessful attempts."""
     sqs = boto3.client(
         'sqs', 
         region_name=meta["sqsRegion"],
@@ -85,17 +88,27 @@ def send_sqs(meta):
         aws_secret_access_key=meta["awsSecret"]
     )
 
-    for attempt in range(MAX_RETRIES):
+    sqs_payload = {
+        "lab_id": meta["labID"],
+        "dep_id": meta["depID"],
+        "email": meta["email"],
+        "petname": meta["petname"]
+    }
+
+    failed_attempts = 0 
+
+    while failed_attempts < MAX_SQS_RETRIES:
         try:
-            response = sqs.send_message(QueueUrl=meta["sqsURL"], MessageBody=json.dumps(meta))
+            response = sqs.send_message(QueueUrl=meta["sqsURL"], MessageBody=json.dumps(sqs_payload))
             print(f"SQS message sent: {response['MessageId']}")
-            return True
-        except boto3.exceptions.Boto3Error as e:
-            print(f"SQS send attempt {attempt + 1} failed: {e}")
+            return True 
+        except Exception as e:
+            failed_attempts += 1
+            print(f"SQS send attempt {failed_attempts} failed: {e}")
             time.sleep(RETRY_DELAY)
 
-    print("Failed to send SQS message after retries.")
-    return False
+    print(f"SQS message failed {MAX_SQS_RETRIES} times. Exiting.")
+    sys.exit(1) 
 
 def main():
     """Main function."""
@@ -103,6 +116,7 @@ def main():
     if not metadata:
         return
 
+    print(f"Metadata fetched: {metadata}")
     lab_info = get_lab_info(metadata)
     if not lab_info or "sqsURL" not in lab_info:
         print("Lab info missing or SQS URL not found. Exiting.")

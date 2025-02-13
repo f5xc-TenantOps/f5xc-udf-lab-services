@@ -16,7 +16,7 @@ These resources will remain in the tenant for the lifecycle of the UDF deploymen
 - [X] Continues sending SQSs to signify the deployment is active
 
 ### Requirements
-The UDF deployment's "runner" instance must be must be tagged:
+The UDF deployment's "runner" instance must be must be tagged with the "labid":
 
 <img src="./images/tags.png" alt="tags" width="512"/>
 
