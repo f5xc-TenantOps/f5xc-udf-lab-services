@@ -2,8 +2,8 @@
 
 SERVICE_NAME="tops-lab"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
-DOCKER_IMAGE="ghcr.io/f5xc-tenantops/f5xc-udf-lab-services/tops-lab:dev"
-S3_BUCKET="tops-registry-bucket-dev"
+DOCKER_IMAGE="ghcr.io/f5xc-tenantops/f5xc-udf-lab-services/tops-lab:latest"
+S3_BUCKET="tops-registry-bucket"
 
 # Ensure script is run as root
 if [ "$EUID" -ne 0 ]; then
