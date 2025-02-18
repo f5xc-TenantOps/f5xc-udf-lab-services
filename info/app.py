@@ -69,8 +69,7 @@ def main():
         for rule in app.url_map.iter_rules():
             if rule.endpoint != 'static':
                 endpoints.append({
-                    "route": rule.rule,
-                    "methods": list(rule.methods)
+                    "route": rule.rule
                 })
         return jsonify(endpoints)
 
