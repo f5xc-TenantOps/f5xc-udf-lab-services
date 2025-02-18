@@ -54,6 +54,7 @@ ExecStartPre=-/usr/bin/docker pull $DOCKER_IMAGE
 ExecStart=/usr/bin/docker run --rm \\
     --name $SERVICE_NAME \\
     --env LAB_INFO_BUCKET=$S3_BUCKET \\
+    -p 5123:5123 \\
     -v /state:/state \\
     $DOCKER_IMAGE
 ExecStop=/usr/bin/docker stop $SERVICE_NAME
