@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SERVICE_NAME="tops-lab"
+SERVICE_NAME="tops-info"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 DOCKER_IMAGE="ghcr.io/f5xc-tenantops/f5xc-udf-lab-services/tops-info:dev"
 S3_BUCKET="tops-registry-bucket-dev"
