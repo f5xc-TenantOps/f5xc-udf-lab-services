@@ -2,95 +2,100 @@
 import json
 import time
 import sys
+import requests
 from flask import Flask, jsonify
 
-
 STATE_FILE = "/state/deployment_state.json"
-MAX_WAIT_TIME = 60  # Maximum wait time in seconds
-RETRY_DELAY = 5  # Time to wait between retries in seconds
+METADATA_BASE_URL = "http://metadata.udf"
+MAX_RETRIES = 10
+RETRY_DELAY = 6
+
+app = Flask(__name__)
+
+def fetch_depid():
+    """Fetch and structure metadata, retrying until the service is available."""
+    for attempt in range(MAX_RETRIES):
+        try:
+            response = requests.get(f"{METADATA_BASE_URL}/deployment/id/", timeout=5)
+            return response.text.strip()
+        except requests.RequestException as e:
+            print(f"Metadata fetch attempt {attempt + 1} failed: {e}")
+            time.sleep(RETRY_DELAY)
+    return None 
 
 def load_state():
     """Load deployment state from a file."""
     try:
         with open(STATE_FILE, 'r', encoding="utf-8") as f:
-            return json.load(f)
+            state = json.load(f)
+            if state.get("metadata", {}).get("depID") == fetch_depid():
+                return state
     except (FileNotFoundError, json.JSONDecodeError):
         return None
+    return None
 
 def wait_for_state():
-    """Wait for the state file to appear, retrying every 5 seconds up to 1 minute."""
-    elapsed_time = 0
-    while elapsed_time < MAX_WAIT_TIME:
+    """Wait for a current state file."""
+    for attempt in range(1, MAX_RETRIES + 1):
         state = load_state()
         if state:
             return state
-        print(f"State file not found. Retrying in {RETRY_DELAY} seconds...")
+        print(f"State file not synced. Retrying in {RETRY_DELAY} seconds (Attempt {attempt}/{MAX_RETRIES})...")
         time.sleep(RETRY_DELAY)
-        elapsed_time += RETRY_DELAY
 
-    print(f"Error: State file {STATE_FILE} not found after {MAX_WAIT_TIME} seconds. Exiting.")
+    print(f"Error: Synced state file {STATE_FILE} not found after {MAX_RETRIES} attempts. Exiting.")
     sys.exit(1)
 
 def validate_state(state):
     """Validate that state contains required keys."""
     if not state:
-        print("Error: State file is empty or malformed. Exiting.")
-        sys.exit(1)
+        raise ValueError("State file is empty or malformed.")
 
     metadata = state.get("metadata")
     lab_info = state.get("labinfo")
 
     if not metadata:
-        print("Error: 'metadata' key is missing in state file. Exiting.")
-        sys.exit(1)
+        raise ValueError("Error: 'metadata' key is missing in state file.")
 
     if not lab_info:
-        print("Error: 'labinfo' key is missing in state file. Exiting.")
-        sys.exit(1)
+        raise ValueError("Error: 'labinfo' key is missing in state file.")
 
     petname = metadata.get("petname")
     if not petname:
-        print("Error: 'petname' is missing in metadata. Exiting.")
-        sys.exit(1)
+        raise ValueError("Error: 'petname' is missing in metadata.")
 
     return metadata, lab_info, petname
 
+@app.route('/')
+def index():
+    """Return a list of all API endpoints."""
+    endpoints = [{"route": rule.rule} for rule in app.url_map.iter_rules() if rule.endpoint != 'static']
+    return jsonify(endpoints)
+
+@app.route('/status', methods=['GET'])
+def status():
+    return jsonify({"status": "running"}), 200
+
+@app.route('/metadata', methods=['GET'])
+def get_metadata():
+    return jsonify(metadata), 200
+
+@app.route('/labinfo', methods=['GET'])
+def get_labinfo():
+    return jsonify(lab_info), 200
+
+@app.route('/petname', methods=['GET'])
+def get_petname():
+    return jsonify({"petname": petname}), 200
+
 def main():
-    """Main function to set up and run the Flask app."""
+    """Main function"""
+    global metadata, lab_info, petname
     state = wait_for_state()
     metadata, lab_info, petname = validate_state(state)
 
-    app = Flask(__name__)
-
-    @app.route('/')
-    def index():
-        """Return a list of all API endpoints."""
-        endpoints = []
-        for rule in app.url_map.iter_rules():
-            if rule.endpoint != 'static':
-                endpoints.append({
-                    "route": rule.rule
-                })
-        return jsonify(endpoints)
-
-    @app.route('/status', methods=['GET'])
-    def status():
-        return jsonify({"status": "running"}), 200
-
-    @app.route('/metadata', methods=['GET'])
-    def get_metadata():
-        return jsonify(metadata), 200
-
-    @app.route('/labinfo', methods=['GET'])
-    def get_labinfo():
-        return jsonify(lab_info), 200
-
-    @app.route('/petname', methods=['GET'])
-    def get_petname():
-        return jsonify({"petname": petname}), 200
-
     print("State file loaded successfully. Starting API server.")
-    app.run(host='0.0.0.0', port=5123, debug=False)
+    app.run(host='0.0.0.0', port=5123, debug=False, threaded=True)
 
 if __name__ == '__main__':
     main()
