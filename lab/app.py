@@ -25,11 +25,17 @@ def ensure_state_dir():
     """Ensure the state directory exists."""
     os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
 
-def save_state(state):
-    """Save full deployment state to a file."""
+def save_state(metadata, labinfo):
+    """Save deployment state to a file in a structured JSON format."""
     ensure_state_dir()
+
+    state = {
+        "metadata": metadata,
+        "labinfo": labinfo
+    }
+
     with open(STATE_FILE, 'w', encoding="utf-8") as f:
-        json.dump(state, f)
+        json.dump(state, f, indent=4)
 
 def load_state():
     """Load deployment state from a file."""
@@ -95,20 +101,20 @@ def send_sqs(meta):
         "petname": meta["petname"]
     }
 
-    failed_attempts = 0 
+    failed_attempts = 0
 
     while failed_attempts < MAX_SQS_RETRIES:
         try:
             response = sqs.send_message(QueueUrl=meta["sqsURL"], MessageBody=json.dumps(sqs_payload))
             print(f"SQS message sent: {response['MessageId']}")
-            return True 
+            return True
         except Exception as e:
             failed_attempts += 1
             print(f"SQS send attempt {failed_attempts} failed: {e}")
             time.sleep(RETRY_DELAY)
 
     print(f"SQS message failed {MAX_SQS_RETRIES} times. Exiting.")
-    sys.exit(1) 
+    sys.exit(1)
 
 def main():
     """Main function."""
@@ -126,11 +132,12 @@ def main():
     metadata["sqsRegion"] = metadata["sqsURL"].split('.')[1]
 
     previous_state = load_state()
-    if previous_state and previous_state.get("depID") == metadata["depID"]:
-        metadata["petname"] = previous_state["petname"]
+    if previous_state and previous_state.get("metadata", {}).get("depID") == metadata["depID"]:
+        petname_value = previous_state.get("metadata", {}).get("petname")
     else:
-        metadata["petname"] = petname.Generate()
-        save_state(metadata)
+        petname_value = petname.Generate()
+        metadata["petname"] = petname_value
+        save_state(metadata, lab_info)
 
     while True:
         send_sqs(metadata)
