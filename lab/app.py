@@ -132,11 +132,11 @@ def main():
     metadata["sqsRegion"] = metadata["sqsURL"].split('.')[1]
 
     previous_state = load_state()
+
     if previous_state and previous_state.get("metadata", {}).get("depID") == metadata["depID"]:
-        petname_value = previous_state.get("metadata", {}).get("petname")
+        metadata["petname"] = previous_state.get("metadata", {}).get("petname")
     else:
-        petname_value = petname.Generate()
-        metadata["petname"] = petname_value
+        metadata["petname"] = petname.Generate()
         save_state(metadata, lab_info)
 
     while True:
