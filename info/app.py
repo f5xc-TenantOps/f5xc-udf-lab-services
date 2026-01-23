@@ -1,16 +1,18 @@
 """Service providing an API for deployment information."""
 import json
+import os
 import time
 import sys
 import requests
-from flask import Flask, jsonify
+from flask import Flask, jsonify, render_template
 
 STATE_FILE = "/state/deployment_state.json"
+BACKEND_STATE_FILE = "/state/backend_state.json"
 METADATA_BASE_URL = "http://metadata.udf"
 MAX_RETRIES = 10
 RETRY_DELAY = 6
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='templates')
 
 def fetch_depid():
     """Fetch and structure metadata, retrying until the service is available."""
@@ -33,6 +35,22 @@ def load_state():
     except (FileNotFoundError, json.JSONDecodeError):
         return None
     return None
+
+
+def load_backend_state() -> dict | None:
+    """Load backend state from file written by tops-lab.
+
+    Returns:
+        Backend state dict or None if not available
+    """
+    try:
+        if os.path.exists(BACKEND_STATE_FILE):
+            with open(BACKEND_STATE_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"[WARN] Failed to load backend state: {e}")
+    return None
+
 
 def wait_for_state():
     """Wait for a current state file."""
@@ -72,9 +90,66 @@ def index():
     endpoints = [{"route": rule.rule} for rule in app.url_map.iter_rules() if rule.endpoint != 'static']
     return jsonify(endpoints)
 
-@app.route('/status', methods=['GET'])
-def status():
+@app.route('/health', methods=['GET'])
+def health():
+    """Health check endpoint."""
     return jsonify({"status": "running"}), 200
+
+
+@app.route('/status')
+def status_page():
+    """Render deployment status page."""
+    backend_state = load_backend_state()
+
+    # Get fallback info from local state
+    local_petname = metadata.get("petname") if metadata else None
+    local_email = metadata.get("email") if metadata else None
+
+    return render_template(
+        'status.html',
+        state=backend_state,
+        petname=local_petname,
+        email=local_email
+    )
+
+
+@app.route('/status/json')
+def status_json():
+    """Return deployment status as JSON."""
+    backend_state = load_backend_state()
+    if backend_state:
+        return jsonify(backend_state)
+    return jsonify({"status": "WAITING", "message": "Waiting for backend state"})
+
+
+@app.route('/outputs')
+def get_outputs():
+    """Return all outputs from backend state.
+
+    Other UDF services can poll this endpoint to get provisioned resources
+    like site_token, lb_hostname, etc.
+    """
+    backend_state = load_backend_state()
+    if backend_state and backend_state.get("outputs"):
+        return jsonify(backend_state["outputs"])
+    return jsonify({}), 404
+
+
+@app.route('/outputs/<key>')
+def get_output(key: str):
+    """Return a specific output value.
+
+    Example: GET /outputs/site_token
+
+    Returns 404 if output not yet available (useful for polling).
+    """
+    backend_state = load_backend_state()
+    if backend_state and backend_state.get("outputs"):
+        outputs = backend_state["outputs"]
+        if key in outputs:
+            return jsonify({key: outputs[key]})
+    return jsonify({"error": f"Output '{key}' not available"}), 404
+
 
 @app.route('/metadata', methods=['GET'])
 def get_metadata():

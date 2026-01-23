@@ -7,6 +7,7 @@ WORKDIR /app
 # Copy only necessary files (ignores installer)
 COPY requirements.txt .
 COPY app.py .
+COPY templates/ templates/
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt

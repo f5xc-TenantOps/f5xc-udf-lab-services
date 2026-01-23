@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="refresh" content="5">
+    <title>Lab Deployment Status</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #e0e0e0;
+            padding: 2rem;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .header h1 {
+            font-size: 1.8rem;
+            color: #fff;
+            margin-bottom: 0.5rem;
+        }
+        .header .petname {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #4fc3f7;
+        }
+        .header .email {
+            color: #9e9e9e;
+            font-size: 0.9rem;
+        }
+        .status-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+        }
+        .status-pending { background: #455a64; color: #fff; }
+        .status-in_progress { background: #1976d2; color: #fff; }
+        .status-completed { background: #388e3c; color: #fff; }
+        .status-failed { background: #d32f2f; color: #fff; }
+
+        .steps-list {
+            margin-top: 1.5rem;
+        }
+        .step {
+            display: flex;
+            align-items: center;
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+            border-left: 4px solid #455a64;
+        }
+        .step.success { border-left-color: #4caf50; }
+        .step.in_progress { border-left-color: #2196f3; animation: pulse 2s infinite; }
+        .step.failed { border-left-color: #f44336; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .step-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 1rem;
+            font-size: 1rem;
+        }
+        .step-icon.pending { background: #455a64; }
+        .step-icon.success { background: #4caf50; }
+        .step-icon.in_progress { background: #2196f3; }
+        .step-icon.failed { background: #f44336; }
+
+        .step-info { flex: 1; }
+        .step-name { font-weight: 600; color: #fff; }
+        .step-detail { font-size: 0.85rem; color: #9e9e9e; margin-top: 0.25rem; }
+        .step-error { color: #ef5350; font-size: 0.85rem; margin-top: 0.25rem; }
+
+        .outputs {
+            margin-top: 1.5rem;
+        }
+        .output-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.75rem;
+            background: rgba(76, 175, 80, 0.1);
+            border-radius: 6px;
+            margin-bottom: 0.5rem;
+        }
+        .output-key { color: #81c784; }
+        .output-value {
+            color: #fff;
+            font-family: monospace;
+            word-break: break-all;
+        }
+
+        .waiting {
+            text-align: center;
+            padding: 3rem;
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #4fc3f7;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .refresh-note {
+            text-align: center;
+            color: #757575;
+            font-size: 0.8rem;
+            margin-top: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Lab Deployment Status</h1>
+            {% if state %}
+            <div class="petname">{{ state.petname or 'Initializing...' }}</div>
+            <div class="email">{{ state.email }}</div>
+            {% else %}
+            <div class="petname">{{ petname or 'Unknown' }}</div>
+            <div class="email">{{ email or '' }}</div>
+            {% endif %}
+        </div>
+
+        {% if state %}
+        <div class="status-card">
+            <span class="status-badge status-{{ state.status | lower | replace(' ', '_') }}">
+                {{ state.status }}
+            </span>
+            {% if state.updated_at %}
+            <span style="float: right; color: #757575; font-size: 0.85rem;">
+                Updated: {{ state.updated_at }}
+            </span>
+            {% endif %}
+        </div>
+
+        {% if state.steps %}
+        <div class="status-card">
+            <h3 style="margin-bottom: 1rem; color: #fff;">Workflow Steps</h3>
+            <div class="steps-list">
+                {% for step_name, step in state.steps.items() %}
+                <div class="step {{ step.status | lower }}">
+                    <div class="step-icon {{ step.status | lower }}">
+                        {% if step.status == 'SUCCESS' %}✓
+                        {% elif step.status == 'FAILED' %}✗
+                        {% elif step.status == 'IN_PROGRESS' %}⋯
+                        {% else %}○{% endif %}
+                    </div>
+                    <div class="step-info">
+                        <div class="step-name">{{ step_name | replace('_', ' ') | title }}</div>
+                        {% if step.name %}
+                        <div class="step-detail">{{ step.name }}</div>
+                        {% endif %}
+                        {% if step.error %}
+                        <div class="step-error">{{ step.error }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if state.outputs and state.outputs | length > 0 %}
+        <div class="status-card">
+            <h3 style="margin-bottom: 1rem; color: #fff;">Outputs</h3>
+            <div class="outputs">
+                {% for key, value in state.outputs.items() %}
+                <div class="output-item">
+                    <span class="output-key">{{ key }}</span>
+                    <span class="output-value">{{ value }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if state.errors and state.errors | length > 0 %}
+        <div class="status-card" style="border-color: rgba(244, 67, 54, 0.3);">
+            <h3 style="margin-bottom: 1rem; color: #ef5350;">Errors</h3>
+            {% for error in state.errors %}
+            <div style="color: #ef5350; margin-bottom: 0.5rem;">• {{ error }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% else %}
+        <div class="status-card">
+            <div class="waiting">
+                <div class="spinner"></div>
+                <h3>Waiting for deployment to start...</h3>
+                <p style="color: #757575; margin-top: 1rem;">
+                    Your lab is being provisioned. This page will update automatically.
+                </p>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="refresh-note">
+            Page auto-refreshes every 5 seconds
+        </div>
+    </div>
+</body>
+</html>

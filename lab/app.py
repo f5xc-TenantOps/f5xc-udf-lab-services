@@ -9,13 +9,16 @@ import petname
 import yaml
 
 STATE_FILE = "/state/deployment_state.json"
+BACKEND_STATE_FILE = "/state/backend_state.json"
 METADATA_BASE_URL = "http://metadata.udf"
 MAX_RETRIES = 10
 RETRY_DELAY = 6
 SQS_INTERVAL = 90
 MAX_SQS_RETRIES = 3
+STATE_POLL_INTERVAL = 10  # seconds
 
 LAB_INFO_BUCKET = os.getenv("LAB_INFO_BUCKET")
+DEFAULT_STATE_BUCKET = "tops-deployment-state"
 
 if not LAB_INFO_BUCKET:
     print("Error: LAB_INFO_BUCKET environment variable is not set.")
@@ -85,6 +88,45 @@ def get_lab_info(metadata):
         print(f"Error retrieving lab info from S3 ({LAB_INFO_BUCKET}): {e}")
         return None
 
+def poll_backend_state(dep_id: str, s3_client, state_bucket: str) -> dict | None:
+    """Poll S3 for deployment state file.
+
+    Args:
+        dep_id: Deployment ID to poll for
+        s3_client: Initialized boto3 S3 client
+        state_bucket: S3 bucket name for state files
+
+    Returns:
+        Parsed state dict or None if not found
+    """
+    try:
+        response = s3_client.get_object(
+            Bucket=state_bucket,
+            Key=f"{dep_id}.json"
+        )
+        state = json.loads(response["Body"].read().decode("utf-8"))
+        return state
+    except s3_client.exceptions.NoSuchKey:
+        return None
+    except Exception as e:
+        print(f"[WARN] Failed to poll backend state: {e}")
+        return None
+
+
+def save_backend_state(state: dict) -> None:
+    """Save backend state to local file for info service.
+
+    Args:
+        state: Backend state dict from S3
+    """
+    try:
+        ensure_state_dir()
+        with open(BACKEND_STATE_FILE, "w", encoding="utf-8") as f:
+            json.dump(state, f, indent=2)
+    except Exception as e:
+        print(f"[ERROR] Failed to save backend state: {e}")
+
+
 def send_sqs(meta):
     """Send only labID, depID, email, and petname to SQS. Fails after 3 unsuccessful attempts."""
     sqs = boto3.client(
@@ -139,9 +181,36 @@ def main():
         metadata["petname"] = petname.Generate()
         save_state(metadata, lab_info)
 
+    # Set up S3 client for state polling
+    state_bucket = lab_info.get("stateBucket", DEFAULT_STATE_BUCKET)
+    s3_client = boto3.client(
+        's3',
+        region_name="us-east-1",
+        aws_access_key_id=metadata["awsKey"],
+        aws_secret_access_key=metadata["awsSecret"]
+    )
+
+    last_sqs_time = 0
+    last_state_poll = 0
+
     while True:
-        send_sqs(metadata)
-        time.sleep(SQS_INTERVAL)
+        current_time = time.time()
+
+        # Poll backend state every STATE_POLL_INTERVAL seconds
+        if current_time - last_state_poll >= STATE_POLL_INTERVAL:
+            backend_state = poll_backend_state(metadata["depID"], s3_client, state_bucket)
+            if backend_state:
+                save_backend_state(backend_state)
+                print(f"[INFO] Backend state updated: {backend_state.get('status', 'unknown')}")
+            last_state_poll = current_time
+
+        # Send SQS heartbeat every SQS_INTERVAL seconds
+        if current_time - last_sqs_time >= SQS_INTERVAL:
+            send_sqs(metadata)
+            last_sqs_time = current_time
+
+        # Sleep for the shorter interval
+        time.sleep(min(STATE_POLL_INTERVAL, SQS_INTERVAL))
 
 if __name__ == "__main__":
     main()
