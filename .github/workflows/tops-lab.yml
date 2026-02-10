@@ -5,8 +5,9 @@ on:
     branches:
       - main
       - dev
+      - hive
     paths:
-      - "lab/**" 
+      - "app/**"
   workflow_dispatch:
 
 permissions:
@@ -20,6 +21,26 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run Python tests
+        run: |
+          pip install -r app/requirements.txt
+          cd app && python -m pytest test_app.py -v
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build frontend
+        run: |
+          cd app/frontend && npm ci && npm run build
+          cp -r dist/ ../static/
 
       - name: Log in to GitHub Container Registry
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
@@ -35,17 +56,19 @@ jobs:
 
           if [[ "$BRANCH_NAME" == "main" ]]; then
             TAGS=("$IMAGE_NAME:latest" "$IMAGE_NAME:main" "$IMAGE_NAME:$COMMIT_SHA")
-          else
+          elif [[ "$BRANCH_NAME" == "dev" ]]; then
             TAGS=("$IMAGE_NAME:dev" "$IMAGE_NAME:$COMMIT_SHA")
+          else
+            TAGS=("$IMAGE_NAME:hive" "$IMAGE_NAME:$COMMIT_SHA")
           fi
 
           echo "IMAGE_NAME=${IMAGE_NAME}" >> $GITHUB_ENV
           echo "TAGS=${TAGS[@]}" >> $GITHUB_ENV
 
-      - name: Build Docker Image (Using lab Directory)
+      - name: Build Docker Image
         run: |
           for TAG in ${{ env.TAGS }}; do
-            docker build -t $TAG lab/
+            docker build -t $TAG app/
           done
 
       - name: Push Docker Image to GHCR

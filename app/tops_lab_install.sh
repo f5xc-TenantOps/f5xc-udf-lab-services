@@ -1,9 +1,8 @@
 #!/bin/bash
 
-SERVICE_NAME="tops-info"
+SERVICE_NAME="tops-lab"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
-DOCKER_IMAGE="ghcr.io/f5xc-tenantops/f5xc-udf-lab-services/tops-info:dev"
-S3_BUCKET="tops-registry-bucket-dev"
+DOCKER_IMAGE="ghcr.io/f5xc-tenantops/f5xc-udf-lab-services/tops-lab:latest"
 
 # Ensure script is run as root
 if [ "$EUID" -ne 0 ]; then
@@ -44,7 +43,7 @@ docker pull $DOCKER_IMAGE
 echo "Creating new systemd service..."
 cat <<EOF > $SERVICE_FILE
 [Unit]
-Description=Tops Lab Info Service
+Description=Tops Lab Service
 Requires=docker.service
 After=docker.service
 
@@ -53,7 +52,7 @@ Restart=always
 ExecStartPre=-/usr/bin/docker pull $DOCKER_IMAGE
 ExecStart=/usr/bin/docker run --rm \\
     --name $SERVICE_NAME \\
-    --env LAB_INFO_BUCKET=$S3_BUCKET \\
+    --pull=always \\
     -p 5123:5123 \\
     -v /state:/state \\
     $DOCKER_IMAGE

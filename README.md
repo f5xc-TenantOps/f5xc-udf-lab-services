@@ -1,26 +1,47 @@
 # F5xc UDF Lab Services
 
-**These services are unusable outside of the F5 Universal Demo Framework (UDF) as they rely on the UDF metadata service.**
+**This service is unusable outside of the F5 Universal Demo Framework (UDF) as it relies on the UDF metadata service.**
 
-## tops-lab
-This is the base service for all F5XC UDF labs.
-The service kicks off automation to provision a user and F5XC resources in a target tenant.
-These resources will remain in the tenant for the lifecycle of the UDF deployment + 5 minutes. 
+## Overview
 
-### Actions performed
-- [X] Pulls Deployment info from the UDF metadata service
-- [X] Pulls Lab info from a f5xc-tenantOps S3 bucket
-- [X] Creates a petname
-- [X] Writes a state file for continuity between deployment start/stops
-- [X] Sends an SQS message to kick off account and resource provisioning in F5XC
-- [X] Continues sending SQSs to signify the deployment is active
+`tops-lab` is a consolidated service that runs as a single container, combining what was previously split across `lab/` and `info/` into one application under `app/`.
 
-### Requirements
-The UDF deployment's "runner" instance must be must be tagged with the "labid":
+### What it does
 
-<img src="./images/tags.png" alt="tags" width="512"/>
+- Fetches deployment metadata from the UDF metadata service
+- Sends SQS heartbeats to signal the deployment is active
+- Polls S3 for provisioning state and lab outputs
+- Serves a status page with real-time provisioning progress
+- Exposes an outputs API for retrieving Terraform/provisioning results
+- Handles CE (Customer Edge) registration status
 
-### Installation
-Run the [installer](./lab/tops_lab_install.sh) on the "runner" instance.
+## API Endpoints
 
+| Endpoint | Description |
+|---|---|
+| `/` | Status page (HTML) |
+| `/health` | Health check |
+| `/status/json` | Provisioning status as JSON |
+| `/metadata` | UDF deployment metadata |
+| `/petname` | Deployment petname |
+| `/outputs` | All provisioning outputs |
+| `/outputs/<key>` | Single output value by key |
+| `/ce/status` | Customer Edge registration status |
 
+## Local Development
+
+### Backend
+
+```bash
+cd app
+pip install -r requirements.txt
+python3 -m pytest test_app.py -v
+```
+
+### Frontend
+
+```bash
+cd app/frontend
+npm install
+npm run dev
+```

@@ -1,0 +1,18 @@
+{
+  "dep_id": "deployment-12345",
+  "lab_id": "e37500bc",
+  "petname": "fuzzy-dragon",
+  "email": "user@example.com",
+  "status": "IN_PROGRESS",
+  "updated_at": "2026-02-07T10:30:00Z",
+  "steps": {
+    "namespace": { "status": "SUCCESS", "name": "fuzzy-dragon" },
+    "user": { "status": "IN_PROGRESS" },
+    "resource_provisioning": { "status": "PENDING" }
+  },
+  "outputs": {
+    "site_token": "jwt-abc123-long-token-value",
+    "lb_hostname": "fuzzy-dragon.lab-sec.f5demos.com"
+  },
+  "errors": []
+}

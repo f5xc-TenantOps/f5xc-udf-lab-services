@@ -1,5 +1,0 @@
-boto3
-petname
-requests
-pyyaml
-pytest>=7.4.0
