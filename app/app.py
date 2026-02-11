@@ -81,6 +81,17 @@ def load_deployment_state():
 # ---------------------------------------------------------------------------
 # UDF metadata
 # ---------------------------------------------------------------------------
+def _get_metadata_field(path, label):
+    """Fetch a single metadata field, raising on non-200 or empty response."""
+    resp = http_requests.get(f"{METADATA_BASE_URL}{path}", timeout=5)
+    if resp.status_code != 200:
+        raise RuntimeError(f"{label}: HTTP {resp.status_code} from {path}")
+    value = resp.text.strip()
+    if not value:
+        raise RuntimeError(f"{label}: empty response from {path}")
+    return value
+
+
 def fetch_metadata():
     """Fetch deployment metadata from the UDF metadata service.
 
@@ -89,31 +100,55 @@ def fetch_metadata():
     """
     for attempt in range(MAX_RETRIES):
         try:
-            dep_id = http_requests.get(
-                f"{METADATA_BASE_URL}/deployment/id/", timeout=5
-            ).text.strip()
-            lab_id = http_requests.get(
-                f"{METADATA_BASE_URL}/userTags/name/labid/value/", timeout=5
-            ).text.strip()
-            email = http_requests.get(
-                f"{METADATA_BASE_URL}/deployment/deployer/", timeout=5
-            ).text.strip()
-            aws_creds = http_requests.get(
+            dep_id = _get_metadata_field("/deployment/id/", "deployment ID")
+            lab_id = _get_metadata_field("/userTags/name/labid/value/", "lab ID (labid tag)")
+            email = _get_metadata_field("/deployment/deployer/", "deployer email")
+
+            creds_resp = http_requests.get(
                 f"{METADATA_BASE_URL}/cloudAccounts", timeout=5
-            ).json()
+            )
+            if creds_resp.status_code != 200:
+                raise RuntimeError(
+                    f"Cloud accounts: HTTP {creds_resp.status_code} "
+                    f"-- is a cloud account attached to this deployment?"
+                )
+            aws_creds = creds_resp.json()
+
+            accounts = aws_creds.get("cloudAccounts", [])
+            if not accounts:
+                raise RuntimeError(
+                    "No cloud accounts found in UDF metadata. "
+                    "Attach an AWS cloud account to this deployment."
+                )
+
+            credentials = accounts[0].get("credentials", [])
+            if not credentials:
+                raise RuntimeError(
+                    "Cloud account has no credentials. "
+                    "Check the cloud account configuration in UDF."
+                )
+
+            key = credentials[0].get("key")
+            secret = credentials[0].get("secret")
+            if not key or not secret:
+                raise RuntimeError(
+                    "Cloud account credentials are missing key or secret."
+                )
 
             return {
                 "depID": dep_id,
                 "labID": lab_id,
                 "email": email,
-                "awsKey": aws_creds["cloudAccounts"][0]["credentials"][0]["key"],
-                "awsSecret": aws_creds["cloudAccounts"][0]["credentials"][0]["secret"],
+                "awsKey": key,
+                "awsSecret": secret,
             }
-        except (http_requests.RequestException, KeyError, IndexError) as e:
-            print(f"Metadata fetch attempt {attempt + 1} failed: {e}")
-            time.sleep(RETRY_DELAY)
+        except http_requests.RequestException as e:
+            print(f"[RETRY {attempt + 1}/{MAX_RETRIES}] Metadata service unreachable: {e}")
+        except RuntimeError as e:
+            print(f"[RETRY {attempt + 1}/{MAX_RETRIES}] {e}")
+        time.sleep(RETRY_DELAY)
 
-    print("Metadata service unavailable after retries. Exiting.")
+    print("[FATAL] Metadata not available after all retries. Exiting.")
     return None
 
 
@@ -132,10 +167,30 @@ def fetch_global_config(aws_key, aws_secret):
             aws_access_key_id=aws_key,
             aws_secret_access_key=aws_secret,
         )
-        obj = s3.get_object(Bucket=CONFIG_BUCKET, Key="config.json")
-        return json.loads(obj["Body"].read().decode("utf-8"))
     except Exception as e:
-        print(f"Error fetching global config from s3://{CONFIG_BUCKET}/config.json: {e}")
+        print(f"[ERROR] Failed to create S3 client: {e}")
+        return None
+
+    try:
+        obj = s3.get_object(Bucket=CONFIG_BUCKET, Key="config.json")
+        data = json.loads(obj["Body"].read().decode("utf-8"))
+        if "sqsURL" not in data:
+            print(f"[ERROR] config.json is missing 'sqsURL'. Contents: {list(data.keys())}")
+            return None
+        return data
+    except s3.exceptions.NoSuchBucket:
+        print(f"[ERROR] S3 bucket '{CONFIG_BUCKET}' does not exist. "
+              f"Check CONFIG_BUCKET env var or create the bucket.")
+        return None
+    except s3.exceptions.NoSuchKey:
+        print(f"[ERROR] config.json not found in s3://{CONFIG_BUCKET}/. "
+              f"Upload config.json with sqsURL and stateBucket.")
+        return None
+    except json.JSONDecodeError as e:
+        print(f"[ERROR] config.json is not valid JSON: {e}")
+        return None
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch s3://{CONFIG_BUCKET}/config.json: {e}")
         return None
 
 
@@ -190,9 +245,29 @@ def state_polling_loop(dep_id, s3_client, state_bucket):
 # ---------------------------------------------------------------------------
 # SQS heartbeat
 # ---------------------------------------------------------------------------
+def _parse_sqs_region(sqs_url):
+    """Extract AWS region from SQS URL. Raises RuntimeError on bad format."""
+    # Expected: https://sqs.<region>.amazonaws.com/...
+    try:
+        parts = sqs_url.split(".")
+        if len(parts) < 2 or not parts[1]:
+            raise ValueError
+        return parts[1]
+    except (ValueError, IndexError):
+        raise RuntimeError(
+            f"Cannot parse region from SQS URL: {sqs_url} "
+            f"-- expected https://sqs.<region>.amazonaws.com/..."
+        )
+
+
 def send_sqs(sqs_url, aws_key, aws_secret, dep_id, lab_id, email, pet):
-    """Send heartbeat message to SQS. Exits after MAX_SQS_RETRIES failures."""
-    region = sqs_url.split(".")[1]
+    """Send heartbeat message to SQS. Returns True on success, False after retries."""
+    try:
+        region = _parse_sqs_region(sqs_url)
+    except RuntimeError as e:
+        print(f"[ERROR] {e}")
+        return False
+
     sqs = boto3.client(
         "sqs",
         region_name=region,
@@ -206,8 +281,7 @@ def send_sqs(sqs_url, aws_key, aws_secret, dep_id, lab_id, email, pet):
         "petname": pet,
     }
 
-    failed = 0
-    while failed < MAX_SQS_RETRIES:
+    for attempt in range(1, MAX_SQS_RETRIES + 1):
         try:
             resp = sqs.send_message(
                 QueueUrl=sqs_url, MessageBody=json.dumps(payload)
@@ -215,18 +289,25 @@ def send_sqs(sqs_url, aws_key, aws_secret, dep_id, lab_id, email, pet):
             print(f"SQS message sent: {resp['MessageId']}")
             return True
         except Exception as e:
-            failed += 1
-            print(f"SQS send attempt {failed} failed: {e}")
+            print(f"[WARN] SQS send attempt {attempt}/{MAX_SQS_RETRIES} failed: {e}")
             time.sleep(RETRY_DELAY)
 
-    print(f"SQS message failed {MAX_SQS_RETRIES} times. Exiting.")
-    sys.exit(1)
+    print(f"[ERROR] SQS heartbeat failed {MAX_SQS_RETRIES} times. Will retry next interval.")
+    return False
 
 
 def sqs_heartbeat_loop(sqs_url, aws_key, aws_secret, dep_id, lab_id, email, pet):
     """Background thread: send SQS heartbeat every SQS_INTERVAL seconds."""
+    consecutive_failures = 0
     while True:
-        send_sqs(sqs_url, aws_key, aws_secret, dep_id, lab_id, email, pet)
+        success = send_sqs(sqs_url, aws_key, aws_secret, dep_id, lab_id, email, pet)
+        if success:
+            consecutive_failures = 0
+        else:
+            consecutive_failures += 1
+            if consecutive_failures >= 5:
+                print("[ERROR] SQS heartbeat has failed 5 consecutive intervals. "
+                      "Backend will not extend deployment TTL.")
         time.sleep(SQS_INTERVAL)
 
 
@@ -354,8 +435,8 @@ def main():
     else:
         # 3. Fetch global config
         config = fetch_global_config(metadata["awsKey"], metadata["awsSecret"])
-        if not config or "sqsURL" not in config:
-            print("Global config missing or sqsURL not found. Exiting.")
+        if not config:
+            print("[FATAL] Cannot proceed without global config. Exiting.")
             return
 
         # 4. Generate petname
