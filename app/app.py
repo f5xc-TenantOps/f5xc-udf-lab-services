@@ -43,7 +43,7 @@ _ce_registration_started = False
 # ---------------------------------------------------------------------------
 # Flask app
 # ---------------------------------------------------------------------------
-app = Flask(__name__, static_folder="static", static_url_path="/static")
+app = Flask(__name__, static_folder="static", static_url_path="")
 
 
 # ---------------------------------------------------------------------------
