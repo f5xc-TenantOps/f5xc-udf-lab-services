@@ -2,12 +2,12 @@
   <div class="app">
     <!-- Header -->
     <header class="header">
-      <div class="logo">F5</div>
+      <img src="https://www.logo.wine/a/logo/F5_Networks/F5_Networks-Logo.wine.svg" alt="F5" class="logo" />
       <div class="header-text">
         <h1>Lab Deployment Status</h1>
         <div v-if="metadata" class="header-meta">
-          <span class="petname">{{ metadata.petname }}</span>
-          <span class="email">{{ metadata.email }}</span>
+          <span class="meta-line">{{ metadata.email }}</span>
+          <span class="meta-line">{{ metadata.petname }}</span>
         </div>
       </div>
     </header>
@@ -16,9 +16,9 @@
       <!-- Deployment Status Card -->
       <section class="card">
         <div class="card-header">
-          <h2 class="card-title">Deployment Status</h2>
+          <h2 class="card-title">XC Deployment Status</h2>
           <span v-if="deployStatus" :class="['badge', statusBadgeClass]">
-            {{ deployStatus.status }}
+            {{ formatStatus(deployStatus.status) }}
           </span>
         </div>
 
@@ -77,7 +77,7 @@
       <section v-if="showCeCard" class="card">
         <div class="card-header">
           <h2 class="card-title">CE Registration</h2>
-          <span :class="['badge', ceBadgeClass]">{{ ceStatus.status || ceStatus.state || 'UNKNOWN' }}</span>
+          <span :class="['badge', ceBadgeClass]">{{ formatStatus(ceStatus.status || ceStatus.state || 'UNKNOWN') }}</span>
         </div>
 
         <div class="status-grid">
@@ -181,6 +181,14 @@ const hasErrors = computed(() => {
 
 // -- Methods --
 
+function formatStatus(status) {
+  if (!status) return ''
+  return status
+    .split('_')
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ')
+}
+
 function stepIconClass(status) {
   const s = (status || '').toUpperCase()
   if (s === 'SUCCESS') return 'step-icon-green'
@@ -256,16 +264,8 @@ onUnmounted(() => {
 }
 
 .logo {
-  width: 48px;
-  height: 48px;
-  background: #e4002b;
-  color: #ffffff;
-  font-weight: 700;
-  font-size: 1.25rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
+  height: 40px;
+  width: auto;
   flex-shrink: 0;
 }
 
@@ -283,19 +283,14 @@ onUnmounted(() => {
 
 .header-meta {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  flex-direction: column;
+  gap: 0.125rem;
 }
 
-.petname {
-  font-size: 0.9375rem;
-  font-weight: 500;
+.meta-line {
+  font-size: 0.875rem;
+  font-weight: 400;
   color: #374151;
-}
-
-.email {
-  font-size: 0.8125rem;
-  color: #6b7280;
 }
 
 /* -- Main layout -- */
@@ -307,7 +302,7 @@ onUnmounted(() => {
 
 /* -- Cards -- */
 .card {
-  background: #f5f5f5;
+  background: #ebebeb;
   border-radius: 8px;
   padding: 1.5rem;
   margin-bottom: 1rem;
@@ -337,7 +332,6 @@ onUnmounted(() => {
   border-radius: 9999px;
   font-size: 0.75rem;
   font-weight: 600;
-  text-transform: uppercase;
   white-space: nowrap;
 }
 
