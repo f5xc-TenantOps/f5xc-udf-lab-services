@@ -28,6 +28,12 @@
 | `/outputs/<key>` | Single output value by key |
 | `/ce/status` | Customer Edge registration status |
 
+## Installation (UDF Runner Instance)
+
+```bash
+curl -sfL https://raw.githubusercontent.com/f5xc-TenantOps/f5xc-udf-lab-services/hive/tops_lab_install.sh | sudo bash
+```
+
 ## Local Development
 
 ### Backend
