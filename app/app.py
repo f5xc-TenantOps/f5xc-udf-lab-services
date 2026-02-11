@@ -161,6 +161,7 @@ def fetch_metadata():
 def fetch_global_config(aws_key, aws_secret):
     """Read config.json from S3 CONFIG_BUCKET.
 
+    Retries up to MAX_RETRIES times with RETRY_DELAY between attempts.
     Returns dict with sqsURL and stateBucket, or None on failure.
     """
     try:
@@ -174,27 +175,32 @@ def fetch_global_config(aws_key, aws_secret):
         print(f"[ERROR] Failed to create S3 client: {e}")
         return None
 
-    try:
-        obj = s3.get_object(Bucket=CONFIG_BUCKET, Key="config.json")
-        data = json.loads(obj["Body"].read().decode("utf-8"))
-        if "sqsURL" not in data:
-            print(f"[ERROR] config.json is missing 'sqsURL'. Contents: {list(data.keys())}")
+    for attempt in range(MAX_RETRIES):
+        try:
+            obj = s3.get_object(Bucket=CONFIG_BUCKET, Key="config.json")
+            data = json.loads(obj["Body"].read().decode("utf-8"))
+            if "sqsURL" not in data:
+                print(f"[ERROR] config.json is missing 'sqsURL'. Contents: {list(data.keys())}")
+                return None
+            return data
+        except s3.exceptions.NoSuchBucket:
+            print(f"[ERROR] S3 bucket '{CONFIG_BUCKET}' does not exist. "
+                  f"Check CONFIG_BUCKET env var or create the bucket.")
             return None
-        return data
-    except s3.exceptions.NoSuchBucket:
-        print(f"[ERROR] S3 bucket '{CONFIG_BUCKET}' does not exist. "
-              f"Check CONFIG_BUCKET env var or create the bucket.")
-        return None
-    except s3.exceptions.NoSuchKey:
-        print(f"[ERROR] config.json not found in s3://{CONFIG_BUCKET}/. "
-              f"Upload config.json with sqsURL and stateBucket.")
-        return None
-    except json.JSONDecodeError as e:
-        print(f"[ERROR] config.json is not valid JSON: {e}")
-        return None
-    except Exception as e:
-        print(f"[ERROR] Failed to fetch s3://{CONFIG_BUCKET}/config.json: {e}")
-        return None
+        except s3.exceptions.NoSuchKey:
+            print(f"[RETRY {attempt + 1}/{MAX_RETRIES}] config.json not found in "
+                  f"s3://{CONFIG_BUCKET}/. Waiting for backend to create it...")
+            time.sleep(RETRY_DELAY)
+        except json.JSONDecodeError as e:
+            print(f"[ERROR] config.json is not valid JSON: {e}")
+            return None
+        except Exception as e:
+            print(f"[RETRY {attempt + 1}/{MAX_RETRIES}] Failed to fetch "
+                  f"s3://{CONFIG_BUCKET}/config.json: {e}")
+            time.sleep(RETRY_DELAY)
+
+    print(f"[FATAL] config.json not available after {MAX_RETRIES} retries.")
+    return None
 
 
 # ---------------------------------------------------------------------------
