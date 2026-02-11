@@ -36,10 +36,18 @@ def discover_ce_ip():
         resp = http_requests.get(
             f"{METADATA_BASE_URL}/userTags/name/role/value/CE", timeout=5
         )
+        if resp.status_code == 400:
+            raise RuntimeError(
+                "No 'role' user tag found. Add a user tag role=CE to the "
+                "CE instance in this UDF deployment."
+            )
         resp.raise_for_status()
         results = resp.json()
         if not results:
-            raise RuntimeError("No instances tagged role=CE found")
+            raise RuntimeError(
+                "No instances tagged role=CE found. Tag the CE instance "
+                "with user tag role=CE in UDF."
+            )
         return results[0]["mgmtIp"]
     except RuntimeError:
         raise

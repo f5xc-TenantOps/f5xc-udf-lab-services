@@ -101,7 +101,10 @@ def fetch_metadata():
     for attempt in range(MAX_RETRIES):
         try:
             dep_id = _get_metadata_field("/deployment/id/", "deployment ID")
-            lab_id = _get_metadata_field("/userTags/name/labid/value/", "lab ID (labid tag)")
+            lab_id = _get_metadata_field(
+                "/userTags/name/labid/value/",
+                "lab ID (labid tag) -- add a 'labid' user tag to this UDF instance",
+            )
             email = _get_metadata_field("/deployment/deployer/", "deployer email")
 
             creds_resp = http_requests.get(
