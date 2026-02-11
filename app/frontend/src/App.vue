@@ -1,8 +1,5 @@
 <template>
   <div class="app">
-    <!-- Top accent line -->
-    <div class="accent-bar"></div>
-
     <!-- Header -->
     <header class="header">
       <img src="https://www.logo.wine/a/logo/F5_Networks/F5_Networks-Logo.wine.svg" alt="F5" class="logo" />
@@ -10,7 +7,6 @@
         <h1>Lab Deployment Status</h1>
         <span v-if="metadata" class="header-email">{{ metadata.email }}</span>
       </div>
-      <div class="header-pulse" :class="pulseClass"></div>
     </header>
 
     <main class="main">
@@ -173,15 +169,6 @@ let ceInterval = null
 
 // -- Computed --
 
-const pulseClass = computed(() => {
-  if (!deployStatus.value) return 'pulse-gray'
-  const s = (deployStatus.value.status || '').toUpperCase()
-  if (s === 'COMPLETED') return 'pulse-green'
-  if (s === 'IN_PROGRESS') return 'pulse-amber'
-  if (s === 'FAILED') return 'pulse-red'
-  return 'pulse-gray'
-})
-
 const statusBadgeClass = computed(() => {
   if (!deployStatus.value) return 'badge-gray'
   const s = (deployStatus.value.status || '').toUpperCase()
@@ -296,26 +283,26 @@ onUnmounted(() => {
 
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700&family=JetBrains+Mono:wght@400;500&display=swap');
+html, body { margin: 0; padding: 0; background: #1a1e2a; }
 </style>
 
 <style scoped>
 .app {
-  --bg: #0c0e14;
-  --surface: #14161e;
-  --surface-raised: #1a1d28;
-  --border: #252833;
-  --border-subtle: #1e2130;
+  --bg: #1a1e2a;
+  --surface: #232838;
+  --surface-raised: #2a3042;
+  --border: #333a4d;
+  --border-subtle: #2a3042;
   --text: #e2e4ea;
-  --text-muted: #7a7f93;
-  --text-dim: #4e5263;
+  --text-muted: #8b92a8;
+  --text-dim: #5c6378;
   --accent: #e4002b;
-  --accent-glow: rgba(228, 0, 43, 0.15);
   --green: #34d399;
-  --green-dim: rgba(52, 211, 153, 0.12);
+  --green-dim: rgba(52, 211, 153, 0.15);
   --amber: #fbbf24;
-  --amber-dim: rgba(251, 191, 36, 0.12);
+  --amber-dim: rgba(251, 191, 36, 0.15);
   --red: #f87171;
-  --red-dim: rgba(248, 113, 113, 0.12);
+  --red-dim: rgba(248, 113, 113, 0.15);
   --font: 'DM Sans', system-ui, sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, monospace;
 
@@ -325,12 +312,6 @@ onUnmounted(() => {
   color: var(--text);
 }
 
-/* -- Accent bar -- */
-.accent-bar {
-  height: 3px;
-  background: linear-gradient(90deg, var(--accent) 0%, transparent 60%);
-}
-
 /* -- Header -- */
 .header {
   display: flex;
@@ -338,14 +319,12 @@ onUnmounted(() => {
   gap: 1.25rem;
   padding: 1.5rem 2rem;
   border-bottom: 1px solid var(--border);
-  position: relative;
 }
 
 .logo {
-  height: 56px;
+  height: 64px;
   width: auto;
   flex-shrink: 0;
-  filter: brightness(0) invert(1);
 }
 
 .header-text {
@@ -356,7 +335,7 @@ onUnmounted(() => {
 }
 
 .header h1 {
-  font-size: 1.125rem;
+  font-size: 1.25rem;
   font-weight: 600;
   margin: 0;
   letter-spacing: -0.01em;
@@ -364,22 +343,10 @@ onUnmounted(() => {
 }
 
 .header-email {
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   color: var(--text-muted);
   font-weight: 400;
 }
-
-.header-pulse {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.pulse-green { background: var(--green); box-shadow: 0 0 8px var(--green); }
-.pulse-amber { background: var(--amber); box-shadow: 0 0 8px var(--amber); animation: pulse 2s ease-in-out infinite; }
-.pulse-red { background: var(--red); box-shadow: 0 0 8px var(--red); }
-.pulse-gray { background: var(--text-dim); }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }
@@ -397,8 +364,8 @@ onUnmounted(() => {
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 1.25rem 1.5rem;
+  border-radius: 10px;
+  padding: 1.5rem 1.75rem;
   margin-bottom: 1rem;
 }
 
@@ -414,10 +381,10 @@ onUnmounted(() => {
 }
 
 .card-title {
-  font-size: 0.6875rem;
+  font-size: 0.8125rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   color: var(--text-muted);
   margin: 0;
 }
@@ -427,9 +394,9 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
-  padding: 0.25rem 0.75rem;
+  padding: 0.3rem 0.875rem;
   border-radius: 9999px;
-  font-size: 0.6875rem;
+  font-size: 0.8125rem;
   font-weight: 600;
   font-family: var(--mono);
   letter-spacing: 0.02em;
@@ -461,7 +428,7 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.5rem 0;
+  padding: 0.625rem 0;
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -470,20 +437,20 @@ onUnmounted(() => {
 }
 
 .meta-label {
-  font-size: 0.8125rem;
+  font-size: 0.9375rem;
   color: var(--text-dim);
   font-weight: 500;
 }
 
 .meta-value {
-  font-size: 0.8125rem;
+  font-size: 0.9375rem;
   color: var(--text);
   font-weight: 500;
 }
 
 .meta-value.mono {
   font-family: var(--mono);
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   color: var(--text-muted);
 }
 
@@ -508,10 +475,10 @@ onUnmounted(() => {
 }
 
 .section-label {
-  font-size: 0.6875rem;
+  font-size: 0.8125rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   color: var(--text-dim);
   margin: 0 0 0.75rem 0;
 }
@@ -538,13 +505,13 @@ onUnmounted(() => {
 
 .step-indicator {
   flex-shrink: 0;
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  font-size: 0.6875rem;
+  font-size: 0.8125rem;
   font-weight: 700;
 }
 
@@ -566,7 +533,7 @@ onUnmounted(() => {
 }
 
 .step-name {
-  font-size: 0.8125rem;
+  font-size: 0.9375rem;
   font-weight: 500;
   color: var(--text);
 }
@@ -583,10 +550,10 @@ onUnmounted(() => {
 }
 
 .step-badge {
-  font-size: 0.625rem;
+  font-size: 0.75rem;
   font-family: var(--mono);
   font-weight: 500;
-  padding: 0.125rem 0.5rem;
+  padding: 0.2rem 0.625rem;
   border-radius: 4px;
   white-space: nowrap;
   flex-shrink: 0;
