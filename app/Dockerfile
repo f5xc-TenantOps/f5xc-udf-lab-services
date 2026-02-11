@@ -5,5 +5,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app.py .
 COPY ce_client.py .
 COPY static/ static/
+ENV PYTHONUNBUFFERED=1
 EXPOSE 5123
 CMD ["python", "app.py"]
