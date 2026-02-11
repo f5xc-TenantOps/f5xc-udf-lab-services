@@ -7,7 +7,7 @@
         <h1>Lab Deployment Status</h1>
         <div v-if="metadata" class="header-meta">
           <span class="meta-line">{{ metadata.email }}</span>
-          <span class="meta-line">{{ metadata.petname }}</span>
+          <span class="meta-line">{{ metadata.petname }} <span v-if="deployStatus && deployStatus.lab_id" class="lab-id">{{ deployStatus.lab_id }}</span></span>
         </div>
       </div>
     </header>
@@ -28,10 +28,10 @@
 
         <div v-else>
           <!-- Step-by-step progress -->
-          <div v-if="deployStatus.steps && deployStatus.steps.length" class="steps-list">
+          <div v-if="stepsList.length" class="steps-list">
             <div
-              v-for="(step, i) in deployStatus.steps"
-              :key="i"
+              v-for="step in stepsList"
+              :key="step.name"
               class="step-row"
             >
               <span :class="['step-icon', stepIconClass(step.status)]">
@@ -41,7 +41,7 @@
                 <span v-else class="icon-circle">&#9675;</span>
               </span>
               <div class="step-info">
-                <span class="step-name">{{ step.name }}</span>
+                <span class="step-name">{{ formatStatus(step.name) }}</span>
                 <span v-if="step.detail" class="step-detail">{{ step.detail }}</span>
                 <span v-if="step.error" class="step-error">{{ step.error }}</span>
               </div>
@@ -55,7 +55,7 @@
 
           <!-- Updated timestamp -->
           <div v-if="deployStatus.updated_at" class="updated-at">
-            Updated: {{ deployStatus.updated_at }}
+            Updated: {{ formatTimestamp(deployStatus.updated_at) }}
           </div>
         </div>
       </section>
@@ -153,6 +153,13 @@ const statusBadgeClass = computed(() => {
   return 'badge-gray'
 })
 
+const stepsList = computed(() => {
+  if (!deployStatus.value || !deployStatus.value.steps) return []
+  const steps = deployStatus.value.steps
+  if (Array.isArray(steps)) return steps
+  return Object.entries(steps).map(([name, data]) => ({ name, ...data }))
+})
+
 const hasOutputs = computed(() => {
   if (!deployStatus.value || !deployStatus.value.outputs) return false
   return Object.keys(deployStatus.value.outputs).length > 0
@@ -187,6 +194,14 @@ function formatStatus(status) {
     .split('_')
     .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
     .join(' ')
+}
+
+function formatTimestamp(ts) {
+  try {
+    return new Date(ts).toLocaleString()
+  } catch {
+    return ts
+  }
 }
 
 function stepIconClass(status) {
@@ -291,6 +306,13 @@ onUnmounted(() => {
   font-size: 0.875rem;
   font-weight: 400;
   color: #374151;
+}
+
+.lab-id {
+  color: #9ca3af;
+  font-family: ui-monospace, monospace;
+  font-size: 0.8125rem;
+  margin-left: 0.5rem;
 }
 
 /* -- Main layout -- */
