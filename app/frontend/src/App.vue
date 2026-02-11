@@ -433,7 +433,7 @@ html, body { margin: 0; padding: 0; background: #1a1e2a; }
 }
 
 .meta-row:last-child {
-  border-bottom: none;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .meta-label {
@@ -470,8 +470,7 @@ html, body { margin: 0; padding: 0; background: #1a1e2a; }
 /* -- Steps section -- */
 .steps-section {
   margin-top: 1.25rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--border);
+  padding-top: 0;
 }
 
 .section-label {
