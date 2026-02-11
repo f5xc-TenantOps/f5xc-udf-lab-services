@@ -299,7 +299,7 @@ onUnmounted(() => {
 </style>
 
 <style scoped>
-:root {
+.app {
   --bg: #0c0e14;
   --surface: #14161e;
   --surface-raised: #1a1d28;
@@ -318,9 +318,7 @@ onUnmounted(() => {
   --red-dim: rgba(248, 113, 113, 0.12);
   --font: 'DM Sans', system-ui, sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, monospace;
-}
 
-.app {
   min-height: 100vh;
   background: var(--bg);
   font-family: var(--font);
