@@ -418,7 +418,23 @@ class TestContractWithBackend:
         assert "namespace" in data["steps"]
         assert data["steps"]["namespace"]["status"] == "SUCCESS"
         assert data["steps"]["user"]["status"] == "IN_PROGRESS"
-        assert data["steps"]["resource_provisioning"]["status"] == "PENDING"
+        assert data["steps"]["resources"]["status"] == "PENDING"
+
+    def test_resources_preserved(self, client, sample_state):
+        app_module._backend_state = sample_state
+        response = client.get("/status/json")
+        data = json.loads(response.data)
+        assert "lab-origin-pool" in data["resources"]
+        assert data["resources"]["lab-origin-pool"]["status"] == "SUCCESS"
+        assert data["resources"]["lab-origin-pool"]["type"] == "origin_pool"
+        assert data["resources"]["lab-http-lb"]["status"] == "IN_PROGRESS"
+        assert data["resources"]["lab-waf"]["status"] == "PENDING"
+
+    def test_tenant_url_preserved(self, client, sample_state):
+        app_module._backend_state = sample_state
+        response = client.get("/status/json")
+        data = json.loads(response.data)
+        assert data["tenant_url"] == "https://f5-xc-lab-sec.console.ves.volterra.io"
 
     def test_outputs_served_correctly(self, client, sample_state):
         app_module._backend_state = sample_state
@@ -442,7 +458,7 @@ class TestContractWithBackend:
     def test_completed_state_with_all_outputs(self, client, sample_state):
         sample_state["status"] = "COMPLETED"
         sample_state["steps"]["user"]["status"] = "SUCCESS"
-        sample_state["steps"]["resource_provisioning"]["status"] = "SUCCESS"
+        sample_state["steps"]["resources"]["status"] = "SUCCESS"
         app_module._backend_state = sample_state
         response = client.get("/status/json")
         data = json.loads(response.data)

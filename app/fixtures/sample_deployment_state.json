@@ -5,10 +5,16 @@
   "email": "user@example.com",
   "status": "IN_PROGRESS",
   "updated_at": "2026-02-07T10:30:00Z",
+  "tenant_url": "https://f5-xc-lab-sec.console.ves.volterra.io",
   "steps": {
     "namespace": { "status": "SUCCESS", "name": "fuzzy-dragon" },
     "user": { "status": "IN_PROGRESS" },
-    "resource_provisioning": { "status": "PENDING" }
+    "resources": { "status": "PENDING" }
+  },
+  "resources": {
+    "lab-origin-pool": { "status": "SUCCESS", "type": "origin_pool" },
+    "lab-http-lb": { "status": "IN_PROGRESS", "type": "http_lb" },
+    "lab-waf": { "status": "PENDING", "type": "waf_policy" }
   },
   "outputs": {
     "site_token": "jwt-abc123-long-token-value",

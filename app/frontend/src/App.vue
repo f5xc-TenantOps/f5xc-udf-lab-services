@@ -47,19 +47,21 @@
             </div>
           </div>
 
-          <!-- Step-by-step progress -->
-          <div v-if="stepsList.length" class="steps-section">
+          <!-- Provisioning progress -->
+          <div v-if="stepsList.length || resourcesList.length || showCeRow" class="steps-section">
             <h3 class="section-label">Provisioning Steps</h3>
             <div class="steps-list">
+              <!-- Workflow steps (namespace, user, resources) -->
               <div
                 v-for="step in stepsList"
-                :key="step.name"
+                :key="'step-' + step.name"
                 :class="['step-row', { 'step-active': step.status === 'IN_PROGRESS' }]"
               >
                 <div :class="['step-indicator', stepIndicatorClass(step.status)]">
                   <span v-if="step.status === 'SUCCESS'" class="icon-check">&#10003;</span>
                   <span v-else-if="step.status === 'IN_PROGRESS'" class="spinner spinner-sm"></span>
                   <span v-else-if="step.status === 'FAILED'" class="icon-x">&#10007;</span>
+                  <span v-else-if="step.status === 'SKIPPED'" class="icon-skip">&#8212;</span>
                   <span v-else class="icon-pending"></span>
                 </div>
                 <div class="step-content">
@@ -69,6 +71,49 @@
                 </div>
                 <span :class="['step-badge', stepBadgeClass(step.status)]">
                   {{ formatStatus(step.status) }}
+                </span>
+              </div>
+
+              <!-- Per-resource items -->
+              <div
+                v-for="res in resourcesList"
+                :key="'res-' + res.name"
+                :class="['step-row', 'step-nested', { 'step-active': res.status === 'IN_PROGRESS' }]"
+              >
+                <div :class="['step-indicator', 'step-indicator-sm', stepIndicatorClass(res.status)]">
+                  <span v-if="res.status === 'SUCCESS'" class="icon-check">&#10003;</span>
+                  <span v-else-if="res.status === 'IN_PROGRESS'" class="spinner spinner-xs"></span>
+                  <span v-else-if="res.status === 'FAILED'" class="icon-x">&#10007;</span>
+                  <span v-else class="icon-pending"></span>
+                </div>
+                <div class="step-content">
+                  <span class="step-name">{{ res.name }}</span>
+                  <span class="step-type">{{ formatStatus(res.type) }}</span>
+                  <span v-if="res.error" class="step-error">{{ res.error }}</span>
+                </div>
+                <span :class="['step-badge', stepBadgeClass(res.status)]">
+                  {{ formatStatus(res.status) }}
+                </span>
+              </div>
+
+              <!-- CE Registration (inline at the end) -->
+              <div
+                v-if="showCeRow"
+                :class="['step-row', { 'step-active': ceIsActive }]"
+              >
+                <div :class="['step-indicator', stepIndicatorClass(ceRowStatus)]">
+                  <span v-if="ceRowStatus === 'SUCCESS'" class="icon-check">&#10003;</span>
+                  <span v-else-if="ceRowStatus === 'IN_PROGRESS'" class="spinner spinner-sm"></span>
+                  <span v-else-if="ceRowStatus === 'FAILED'" class="icon-x">&#10007;</span>
+                  <span v-else class="icon-pending"></span>
+                </div>
+                <div class="step-content">
+                  <span class="step-name">CE Registration</span>
+                  <span v-if="ceStatus?.ce_ip" class="step-detail">{{ ceStatus.ce_ip }}</span>
+                  <span v-if="ceStatus?.error" class="step-error">{{ ceStatus.error }}</span>
+                </div>
+                <span :class="['step-badge', stepBadgeClass(ceRowStatus)]">
+                  {{ formatStatus(ceDisplayStatus) }}
                 </span>
               </div>
             </div>
@@ -94,44 +139,6 @@
             <span class="output-key">{{ formatStatus(key) }}</span>
             <span class="output-value">{{ value }}</span>
           </div>
-        </div>
-      </section>
-
-      <!-- CE Status Card -->
-      <section v-if="showCeCard" class="card">
-        <div class="card-header">
-          <h2 class="card-title">CE Registration</h2>
-          <span :class="['badge', ceBadgeClass]">
-            <span class="badge-dot"></span>
-            {{ formatStatus(ceStatus.status || ceStatus.state || 'UNKNOWN') }}
-          </span>
-        </div>
-
-        <div class="deploy-meta">
-          <div v-if="ceStatus.ce_ip" class="meta-row">
-            <span class="meta-label">CE IP</span>
-            <span class="meta-value mono">{{ ceStatus.ce_ip }}</span>
-          </div>
-          <div v-if="ceStatus.hostname" class="meta-row">
-            <span class="meta-label">Hostname</span>
-            <span class="meta-value mono">{{ ceStatus.hostname }}</span>
-          </div>
-          <div v-if="ceStatus.os_version" class="meta-row">
-            <span class="meta-label">OS Version</span>
-            <span class="meta-value">{{ ceStatus.os_version }}</span>
-          </div>
-          <div v-if="ceStatus.public_ip" class="meta-row">
-            <span class="meta-label">Public IP</span>
-            <span class="meta-value mono">{{ ceStatus.public_ip }}</span>
-          </div>
-          <div v-if="ceStatus.state" class="meta-row">
-            <span class="meta-label">State</span>
-            <span class="meta-value">{{ ceStatus.state }}</span>
-          </div>
-        </div>
-
-        <div v-if="ceStatus.error" class="error-banner">
-          {{ ceStatus.error }}
         </div>
       </section>
 
@@ -185,23 +192,39 @@ const stepsList = computed(() => {
   return Object.entries(steps).map(([name, data]) => ({ name, ...data }))
 })
 
+const resourcesList = computed(() => {
+  if (!deployStatus.value || !deployStatus.value.resources) return []
+  return Object.entries(deployStatus.value.resources).map(([name, data]) => ({ name, ...data }))
+})
+
 const hasOutputs = computed(() => {
   if (!deployStatus.value || !deployStatus.value.outputs) return false
   return Object.keys(deployStatus.value.outputs).length > 0
 })
 
-const showCeCard = computed(() => {
+const showCeRow = computed(() => {
   if (!ceStatus.value) return false
   return (ceStatus.value.status || '').toUpperCase() !== 'NOT_STARTED'
 })
 
-const ceBadgeClass = computed(() => {
-  if (!ceStatus.value) return 'badge-gray'
+const ceIsActive = computed(() => {
+  if (!ceStatus.value) return false
+  const s = (ceStatus.value.status || '').toUpperCase()
+  return ['DISCOVERING', 'REGISTERING', 'POLLING'].includes(s)
+})
+
+const ceRowStatus = computed(() => {
+  if (!ceStatus.value) return 'PENDING'
   const s = (ceStatus.value.status || ceStatus.value.state || '').toUpperCase()
-  if (s === 'ONLINE' || s === 'COMPLETED') return 'badge-green'
-  if (s === 'REGISTERING' || s === 'POLLING' || s === 'DISCOVERING') return 'badge-amber'
-  if (s === 'FAILED') return 'badge-red'
-  return 'badge-gray'
+  if (s === 'ONLINE' || s === 'REGISTERED') return 'SUCCESS'
+  if (['DISCOVERING', 'REGISTERING', 'POLLING'].includes(s)) return 'IN_PROGRESS'
+  if (s === 'FAILED' || s === 'TIMEOUT') return 'FAILED'
+  return 'PENDING'
+})
+
+const ceDisplayStatus = computed(() => {
+  if (!ceStatus.value) return 'Pending'
+  return ceStatus.value.status || ceStatus.value.state || 'Pending'
 })
 
 const hasErrors = computed(() => {
@@ -519,8 +542,19 @@ html, body { margin: 0; padding: 0; background: #1a1e2a; }
 .ind-red { background: var(--red-dim); color: var(--red); }
 .ind-gray { background: var(--border); color: var(--text-dim); }
 
+.step-indicator-sm {
+  width: 20px;
+  height: 20px;
+  font-size: 0.625rem;
+}
+
+.step-nested {
+  padding-left: 2.5rem;
+}
+
 .icon-check { font-size: 0.75rem; line-height: 1; }
 .icon-x { font-size: 0.75rem; line-height: 1; }
+.icon-skip { font-size: 0.875rem; line-height: 1; font-weight: 700; }
 .icon-pending { width: 4px; height: 4px; border-radius: 50%; background: var(--text-dim); }
 
 .step-content {
@@ -540,6 +574,12 @@ html, body { margin: 0; padding: 0; background: #1a1e2a; }
 .step-detail {
   font-size: 0.75rem;
   color: var(--text-dim);
+}
+
+.step-type {
+  font-size: 0.6875rem;
+  color: var(--text-dim);
+  font-family: var(--mono);
 }
 
 .step-error {
@@ -585,6 +625,11 @@ html, body { margin: 0; padding: 0; background: #1a1e2a; }
 .spinner-sm {
   width: 10px;
   height: 10px;
+}
+
+.spinner-xs {
+  width: 8px;
+  height: 8px;
 }
 
 @keyframes spin {
