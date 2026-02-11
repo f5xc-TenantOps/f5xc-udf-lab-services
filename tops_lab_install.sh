@@ -53,6 +53,7 @@ ExecStartPre=-/usr/bin/docker pull $DOCKER_IMAGE
 ExecStart=/usr/bin/docker run --rm \\
     --name $SERVICE_NAME \\
     --pull=always \\
+    -e CONFIG_BUCKET=tops-registry-bucket-v2 \\
     -p 5123:5123 \\
     -v /state:/state \\
     $DOCKER_IMAGE
