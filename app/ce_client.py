@@ -21,8 +21,9 @@ CE_PASSWORD = os.environ.get("CE_PASSWORD", "Volterra123")
 CE_CONFIG_PATH = "/api/ves.io.vpm/introspect/write/ves.io.vpm.config/update"
 CE_HEALTH_PATH = "/api/ves.io.vpm/introspect/read/ves.io.vpm.health"
 
-CE_POLL_INTERVAL = 15  # seconds
-CE_TIMEOUT = 600  # 10 minutes
+CE_POLL_INTERVAL = 15       # seconds between polls
+CE_SILENCE_TIMEOUT = 600    # 10 min — give up if CE goes completely silent this long
+CE_OVERALL_TIMEOUT = 1500   # 25 min — hard cap, CE isn't coming up
 
 
 def discover_ce_ip():
@@ -110,17 +111,23 @@ def get_ce_status(ce_ip):
 def poll_ce_until_online(ce_ip):
     """Poll CE health endpoint until state is ONLINE or timeout.
 
+    Uses dual timeouts:
+    - silence timeout: gives up if CE stops responding entirely
+    - overall timeout: hard cap on total wait time
+
     Args:
         ce_ip: CE management IP address
 
     Returns dict with final CE status including state, hostname, etc.
     """
     start = time.time()
+    last_contact = time.time()
     last_state = "UNKNOWN"
 
-    while time.time() - start < CE_TIMEOUT:
+    while True:
         try:
             status = get_ce_status(ce_ip)
+            last_contact = time.time()
             last_state = status.get("state", "UNKNOWN")
             print(f"[INFO] CE state: {last_state}")
 
@@ -133,11 +140,22 @@ def poll_ce_until_online(ce_ip):
         except RuntimeError as e:
             print(f"[WARN] CE poll failed: {e}")
 
-        time.sleep(CE_POLL_INTERVAL)
+        now = time.time()
+        if now - last_contact > CE_SILENCE_TIMEOUT:
+            return {
+                "status": "TIMEOUT",
+                "reason": "silence",
+                "ce_ip": ce_ip,
+                "state": last_state,
+                "error": "CE has not responded for 10 minutes",
+            }
+        if now - start > CE_OVERALL_TIMEOUT:
+            return {
+                "status": "TIMEOUT",
+                "reason": "overall",
+                "ce_ip": ce_ip,
+                "state": last_state,
+                "error": "CE did not come online within 25 minutes",
+            }
 
-    return {
-        "status": "TIMEOUT",
-        "ce_ip": ce_ip,
-        "state": last_state,
-        "error": f"CE did not come online within {CE_TIMEOUT}s",
-    }
+        time.sleep(CE_POLL_INTERVAL)
