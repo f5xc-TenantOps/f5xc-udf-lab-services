@@ -14,10 +14,10 @@
   "resources": {
     "lab-origin-pool": { "status": "SUCCESS", "type": "origin_pool" },
     "lab-http-lb": { "status": "IN_PROGRESS", "type": "http_lb" },
-    "lab-waf": { "status": "PENDING", "type": "waf_policy" }
+    "lab-waf": { "status": "PENDING", "type": "waf_policy" },
+    "fuzzy-dragon-site": { "status": "SUCCESS", "type": "securemesh_site_v2" }
   },
   "outputs": {
-    "site_token": "jwt-abc123-long-token-value",
     "lb_hostname": "fuzzy-dragon.lab-sec.f5demos.com"
   },
   "errors": []

@@ -163,7 +163,6 @@ class TestOutputsEndpoints:
         app_module._backend_state = {
             "status": "COMPLETED",
             "outputs": {
-                "site_token": "abc123",
                 "lb_hostname": "app.example.com",
             },
         }
@@ -172,7 +171,6 @@ class TestOutputsEndpoints:
 
         assert response.status_code == 200
         data = json.loads(response.data)
-        assert data["site_token"] == "abc123"
         assert data["lb_hostname"] == "app.example.com"
 
     def test_outputs_returns_404_when_no_outputs(self, client):
@@ -194,16 +192,15 @@ class TestOutputsEndpoints:
         app_module._backend_state = {
             "status": "COMPLETED",
             "outputs": {
-                "site_token": "abc123",
                 "lb_hostname": "app.example.com",
             },
         }
 
-        response = client.get("/outputs/site_token")
+        response = client.get("/outputs/lb_hostname")
 
         assert response.status_code == 200
         data = json.loads(response.data)
-        assert data["site_token"] == "abc123"
+        assert data["lb_hostname"] == "app.example.com"
 
     def test_output_key_returns_404_when_key_not_found(self, client):
         """GET /outputs/<key> returns 404 when key doesn't exist."""
@@ -483,20 +480,27 @@ class TestContractWithBackend:
         app_module._backend_state = sample_state
         response = client.get("/outputs")
         data = json.loads(response.data)
-        assert data["site_token"] == "jwt-abc123-long-token-value"
         assert data["lb_hostname"] == "fuzzy-dragon.lab-sec.f5demos.com"
 
     def test_specific_output_key(self, client, sample_state):
         app_module._backend_state = sample_state
-        response = client.get("/outputs/site_token")
+        response = client.get("/outputs/lb_hostname")
         data = json.loads(response.data)
-        assert data["site_token"] == "jwt-abc123-long-token-value"
+        assert data["lb_hostname"] == "fuzzy-dragon.lab-sec.f5demos.com"
 
     def test_errors_array_empty(self, client, sample_state):
         app_module._backend_state = sample_state
         response = client.get("/status/json")
         data = json.loads(response.data)
         assert data["errors"] == []
+
+    def test_securemesh_site_resource_preserved(self, client, sample_state):
+        app_module._backend_state = sample_state
+        response = client.get("/status/json")
+        data = json.loads(response.data)
+        assert "fuzzy-dragon-site" in data["resources"]
+        assert data["resources"]["fuzzy-dragon-site"]["type"] == "securemesh_site_v2"
+        assert data["resources"]["fuzzy-dragon-site"]["status"] == "SUCCESS"
 
     def test_completed_state_with_all_outputs(self, client, sample_state):
         sample_state["status"] = "COMPLETED"
