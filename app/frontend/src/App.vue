@@ -104,8 +104,8 @@
           </p>
 
           <!-- Updated timestamp -->
-          <div v-if="deployStatus.updated_at" class="updated-at">
-            Last updated {{ formatTimestamp(deployStatus.updated_at) }}
+          <div v-if="displayTimestamp" class="updated-at">
+            Last updated {{ formatTimestamp(displayTimestamp) }}
           </div>
         </div>
       </section>
@@ -149,6 +149,7 @@ const metadata = ref(null)
 const deployStatus = ref(null)
 const ceStatus = ref(null)
 const showErrorLog = ref(false)
+const lastFetchTime = ref(null)
 
 let statusInterval = null
 let ceInterval = null
@@ -246,6 +247,12 @@ const hasErrors = computed(() => {
   return deployStatus.value?.errors?.length > 0
 })
 
+const displayTimestamp = computed(() => {
+  const backend = deployStatus.value?.updated_at
+  if (ceIsActive.value && lastFetchTime.value) return lastFetchTime.value
+  return backend
+})
+
 const tenantDisplayName = computed(() => {
   if (!deployStatus.value?.tenant_url) return ''
   try {
@@ -314,7 +321,10 @@ async function fetchDeployStatus() {
 async function fetchCeStatus() {
   try {
     const res = await fetch('/ce/status')
-    if (res.ok) ceStatus.value = await res.json()
+    if (res.ok) {
+      ceStatus.value = await res.json()
+      lastFetchTime.value = new Date().toISOString()
+    }
   } catch (e) { console.warn('ce:', e) }
 }
 
