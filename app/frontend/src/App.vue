@@ -48,51 +48,29 @@
           </div>
 
           <!-- Provisioning progress -->
-          <div v-if="stepsList.length || resourcesList.length || showCeRow" class="steps-section">
+          <div v-if="provisioningItems.length || showCeRow" class="steps-section">
             <h3 class="section-label">Provisioning Steps</h3>
             <div class="steps-list">
-              <!-- Workflow steps (namespace, user, resources) -->
+              <!-- Flat list: workflow steps (minus "resources") + individual resources -->
               <div
-                v-for="step in stepsList"
-                :key="'step-' + step.name"
-                :class="['step-row', { 'step-active': step.status === 'IN_PROGRESS' }]"
+                v-for="item in provisioningItems"
+                :key="item.key"
+                :class="['step-row', { 'step-active': item.status === 'IN_PROGRESS' }]"
               >
-                <div :class="['step-indicator', stepIndicatorClass(step.status)]">
-                  <span v-if="step.status === 'SUCCESS'" class="icon-check">&#10003;</span>
-                  <span v-else-if="step.status === 'IN_PROGRESS'" class="spinner spinner-sm"></span>
-                  <span v-else-if="step.status === 'FAILED'" class="icon-x">&#10007;</span>
-                  <span v-else-if="step.status === 'SKIPPED'" class="icon-skip">&#8212;</span>
+                <div :class="['step-indicator', stepIndicatorClass(item.status)]">
+                  <span v-if="item.status === 'SUCCESS'" class="icon-check">&#10003;</span>
+                  <span v-else-if="item.status === 'IN_PROGRESS'" class="spinner spinner-sm"></span>
+                  <span v-else-if="item.status === 'FAILED'" class="icon-x">&#10007;</span>
+                  <span v-else-if="item.status === 'SKIPPED'" class="icon-skip">&#8212;</span>
                   <span v-else class="icon-pending"></span>
                 </div>
                 <div class="step-content">
-                  <span class="step-name">{{ formatStatus(step.name) }}</span>
-                  <span v-if="step.detail" class="step-detail">{{ step.detail }}</span>
-                  <span v-if="step.error" class="step-error">{{ step.error }}</span>
+                  <span class="step-name">{{ item.label }}</span>
+                  <span v-if="item.subtitle" class="step-type">{{ item.subtitle }}</span>
+                  <span v-if="item.error" class="step-error">{{ item.error }}</span>
                 </div>
-                <span :class="['step-badge', stepBadgeClass(step.status)]">
-                  {{ formatStatus(step.status) }}
-                </span>
-              </div>
-
-              <!-- Per-resource items -->
-              <div
-                v-for="res in resourcesList"
-                :key="'res-' + res.name"
-                :class="['step-row', 'step-nested', { 'step-active': res.status === 'IN_PROGRESS' }]"
-              >
-                <div :class="['step-indicator', 'step-indicator-sm', stepIndicatorClass(res.status)]">
-                  <span v-if="res.status === 'SUCCESS'" class="icon-check">&#10003;</span>
-                  <span v-else-if="res.status === 'IN_PROGRESS'" class="spinner spinner-xs"></span>
-                  <span v-else-if="res.status === 'FAILED'" class="icon-x">&#10007;</span>
-                  <span v-else class="icon-pending"></span>
-                </div>
-                <div class="step-content">
-                  <span class="step-name">{{ res.name }}</span>
-                  <span class="step-type">{{ formatStatus(res.type) }}</span>
-                  <span v-if="res.error" class="step-error">{{ res.error }}</span>
-                </div>
-                <span :class="['step-badge', stepBadgeClass(res.status)]">
-                  {{ formatStatus(res.status) }}
+                <span :class="['step-badge', stepBadgeClass(item.status)]">
+                  {{ formatStatus(item.status) }}
                 </span>
               </div>
 
@@ -185,16 +163,36 @@ const statusBadgeClass = computed(() => {
   return 'badge-gray'
 })
 
-const stepsList = computed(() => {
-  if (!deployStatus.value || !deployStatus.value.steps) return []
-  const steps = deployStatus.value.steps
-  if (Array.isArray(steps)) return steps
-  return Object.entries(steps).map(([name, data]) => ({ name, ...data }))
-})
+const provisioningItems = computed(() => {
+  if (!deployStatus.value) return []
+  const items = []
 
-const resourcesList = computed(() => {
-  if (!deployStatus.value || !deployStatus.value.resources) return []
-  return Object.entries(deployStatus.value.resources).map(([name, data]) => ({ name, ...data }))
+  // Workflow steps (namespace, user) — skip "resources" since we list them individually
+  const steps = deployStatus.value.steps || {}
+  for (const [key, data] of Object.entries(steps)) {
+    if (key === 'resources') continue
+    items.push({
+      key: 'step-' + key,
+      label: data.name || formatStatus(key),
+      subtitle: key,
+      status: data.status,
+      error: data.error || null,
+    })
+  }
+
+  // Individual resources — each on its own line
+  const resources = deployStatus.value.resources || {}
+  for (const [name, data] of Object.entries(resources)) {
+    items.push({
+      key: 'res-' + name,
+      label: name,
+      subtitle: formatResourceType(data.type),
+      status: data.status,
+      error: data.error || null,
+    })
+  }
+
+  return items
 })
 
 const hasOutputs = computed(() => {
@@ -246,6 +244,18 @@ const tenantDisplayName = computed(() => {
 function formatStatus(status) {
   if (!status) return ''
   return status.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
+}
+
+const RESOURCE_TYPE_LABELS = {
+  origin_pool: 'origin pool',
+  http_lb: 'http load balancer',
+  tcp_lb: 'tcp load balancer',
+  waf_policy: 'WAF policy',
+}
+
+function formatResourceType(type) {
+  if (!type) return ''
+  return RESOURCE_TYPE_LABELS[type] || type.replace(/_/g, ' ')
 }
 
 function formatTimestamp(ts) {
@@ -542,15 +552,6 @@ html, body { margin: 0; padding: 0; background: #1a1e2a; }
 .ind-red { background: var(--red-dim); color: var(--red); }
 .ind-gray { background: var(--border); color: var(--text-dim); }
 
-.step-indicator-sm {
-  width: 22px;
-  height: 22px;
-  font-size: 0.6875rem;
-}
-
-.step-nested {
-  padding-left: 2.5rem;
-}
 
 .icon-check { font-size: 0.75rem; line-height: 1; }
 .icon-x { font-size: 0.75rem; line-height: 1; }
@@ -625,11 +626,6 @@ html, body { margin: 0; padding: 0; background: #1a1e2a; }
 .spinner-sm {
   width: 10px;
   height: 10px;
-}
-
-.spinner-xs {
-  width: 8px;
-  height: 8px;
 }
 
 @keyframes spin {
