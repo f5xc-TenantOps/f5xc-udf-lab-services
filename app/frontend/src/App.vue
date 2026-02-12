@@ -392,7 +392,7 @@ onUnmounted(() => {
 </script>
 
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 html, body { margin: 0; padding: 0; background: #f5f6f8; transition: background 0.2s; }
 @media (prefers-color-scheme: dark) {
   html, body { background: #22242c; }
@@ -488,7 +488,7 @@ html, body { margin: 0; padding: 0; background: #f5f6f8; transition: background 
 
 .header h1 {
   font-size: 1.125rem;
-  font-weight: 600;
+  font-weight: 700;
   margin: 0;
   letter-spacing: -0.01em;
   color: var(--heading);
@@ -497,7 +497,7 @@ html, body { margin: 0; padding: 0; background: #f5f6f8; transition: background 
 .header-email {
   font-size: 0.8125rem;
   color: var(--text-secondary);
-  font-weight: 400;
+  font-weight: 500;
 }
 
 /* -- Theme toggle -- */
@@ -580,7 +580,7 @@ html, body { margin: 0; padding: 0; background: #f5f6f8; transition: background 
 
 .card-title {
   font-size: 0.8125rem;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-secondary);
@@ -595,7 +595,7 @@ html, body { margin: 0; padding: 0; background: #f5f6f8; transition: background 
   padding: 0.3rem 0.875rem;
   border-radius: 9999px;
   font-size: 0.8125rem;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.01em;
 }
 
@@ -636,13 +636,13 @@ html, body { margin: 0; padding: 0; background: #f5f6f8; transition: background 
 .meta-label {
   font-size: 0.875rem;
   color: var(--text-secondary);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .meta-value {
   font-size: 0.9375rem;
   color: var(--text);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .meta-value.mono {
@@ -656,7 +656,7 @@ html, body { margin: 0; padding: 0; background: #f5f6f8; transition: background 
   color: var(--blue);
   text-decoration: none;
   font-size: 0.875rem;
-  font-weight: 500;
+  font-weight: 600;
   transition: color 0.15s;
 }
 
@@ -673,7 +673,7 @@ html, body { margin: 0; padding: 0; background: #f5f6f8; transition: background 
 
 .section-label {
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-muted);
@@ -732,7 +732,7 @@ html, body { margin: 0; padding: 0; background: #f5f6f8; transition: background 
 
 .step-name {
   font-size: 0.9375rem;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text);
 }
 
@@ -754,7 +754,7 @@ html, body { margin: 0; padding: 0; background: #f5f6f8; transition: background 
 
 .step-badge {
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 700;
   padding: 0.25rem 0.75rem;
   border-radius: 9999px;
   white-space: nowrap;
@@ -832,7 +832,7 @@ html, body { margin: 0; padding: 0; background: #f5f6f8; transition: background 
 .output-key {
   font-size: 0.8125rem;
   color: var(--text-secondary);
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -852,7 +852,7 @@ html, body { margin: 0; padding: 0; background: #f5f6f8; transition: background 
   color: var(--red);
   font-size: 0.875rem;
   font-family: var(--font);
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   padding: 0;
   display: flex;
