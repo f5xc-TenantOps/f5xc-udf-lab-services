@@ -240,7 +240,10 @@ const ceRowStatus = computed(() => {
 
 const ceDisplayStatus = computed(() => {
   if (!ceStatus.value) return 'Pending'
-  return ceStatus.value.status || ceStatus.value.state || 'Pending'
+  const s = (ceStatus.value.status || ceStatus.value.state || '').toUpperCase()
+  if (s === 'ONLINE' || s === 'REGISTERED') return 'Success'
+  if (s === 'TIMEOUT') return 'Failed'
+  return formatStatus(ceStatus.value.status || ceStatus.value.state || 'Pending')
 })
 
 const hasErrors = computed(() => {
