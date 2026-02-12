@@ -369,7 +369,7 @@ def _run_ce_registration(site_token):
         _ce_status = {"status": "REGISTERING", "ce_ip": ce_ip}
 
         register_ce(ce_ip, site_token)
-        _ce_status = {"status": "POLLING", "ce_ip": ce_ip}
+        _ce_status = {"status": "PROVISIONING", "ce_ip": ce_ip}
 
         final_status = poll_ce_until_online(ce_ip)
         _ce_status = final_status
