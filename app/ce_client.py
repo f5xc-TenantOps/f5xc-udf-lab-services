@@ -6,6 +6,7 @@ and polls until it comes online.
 """
 
 import os
+import re
 import time
 import urllib3
 
@@ -35,30 +36,29 @@ def _sanitize_error(exc):
     """Strip noisy connection-pool details from exception messages.
 
     Raw urllib3/requests exceptions include the full
-    HTTPSConnectionPool(...) prefix which is confusing for users.
+    HTTPSConnectionPool(...) prefix and nested <urllib3...object>
+    references which are confusing for users.
     """
     msg = str(exc)
     # Strip HTTPSConnectionPool / HTTPConnectionPool wrapper
-    pool_prefix = "HTTPSConnectionPool"
-    if pool_prefix not in msg:
-        pool_prefix = "HTTPConnectionPool"
-    if pool_prefix in msg:
-        # Find "Caused by ..." or ": " after the pool prefix
-        caused = msg.find("Caused by ")
-        if caused != -1:
-            msg = msg[caused + len("Caused by "):]
-            # Strip wrapping parens/class name like "NewConnectionError('<...>')"
-            if "(" in msg:
-                inner_start = msg.find("(")
-                inner_end = msg.rfind(")")
-                if inner_start != -1 and inner_end > inner_start:
-                    msg = msg[inner_start + 1 : inner_end]
-            # Strip surrounding quotes
-            msg = msg.strip("'\"")
-        else:
-            colon = msg.find(": ", len(pool_prefix))
-            if colon != -1:
-                msg = msg[colon + 2:]
+    for pool_prefix in ("HTTPSConnectionPool", "HTTPConnectionPool"):
+        if pool_prefix in msg:
+            caused = msg.find("Caused by ")
+            if caused != -1:
+                msg = msg[caused + len("Caused by "):]
+            else:
+                colon = msg.find(": ", msg.find(pool_prefix))
+                if colon != -1:
+                    msg = msg[colon + 2:]
+            break
+    # Strip exception class wrappers like NewConnectionError('...')
+    msg = re.sub(r"\w+Error\(['\"]?", "", msg)
+    # Strip <urllib3.connection.HTTPSConnection object at 0x...> references
+    msg = re.sub(r"<[^>]+>", "", msg)
+    # Clean up stray punctuation left from stripping
+    msg = msg.strip("'\"() \n")
+    # Collapse leading ": " or ", " left after object removal
+    msg = re.sub(r"^[,:]\s*", "", msg)
     # Truncate very long messages
     if len(msg) > 200:
         msg = msg[:200] + "..."

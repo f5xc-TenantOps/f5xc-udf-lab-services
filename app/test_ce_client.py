@@ -319,6 +319,24 @@ class TestSanitizeError:
         result = ce_client._sanitize_error(exc)
         assert result == "Connection refused"
 
+    def test_strips_realistic_connection_refused(self):
+        """Strips the full nested exception from a real requests.ConnectionError."""
+        exc = Exception(
+            "HTTPSConnectionPool(host='10.1.1.5', port=65500): "
+            "Max retries exceeded with url: "
+            "/api/ves.io.vpm/introspect/write/ves.io.vpm.config/update "
+            "(Caused by NewConnectionError("
+            "'<urllib3.connection.HTTPSConnection object at 0x7f1234>: "
+            "Failed to establish a new connection: "
+            "[Errno 111] Connection refused'))"
+        )
+        result = ce_client._sanitize_error(exc)
+        assert "HTTPSConnectionPool" not in result
+        assert "urllib3" not in result
+        assert "object at" not in result
+        assert "NewConnectionError" not in result
+        assert "Connection refused" in result
+
     def test_truncates_long_messages(self):
         """Messages over 200 chars are truncated."""
         exc = Exception("x" * 300)

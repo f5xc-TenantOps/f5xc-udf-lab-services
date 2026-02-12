@@ -374,6 +374,7 @@ def _run_ce_registration(site_token):
             poll_ce_until_online,
             poll_ce_until_state,
             CE_RESET_SETTLE_TIME,
+            CE_RESET_POLL_INTERVAL,
         )
 
         _ce_status = {"status": "DISCOVERING"}
@@ -424,7 +425,18 @@ def _run_ce_registration(site_token):
 
         _ce_status = {"status": "REGISTERING", "ce_ip": ce_ip}
 
-        register_ce(ce_ip, site_token)
+        # Retry registration — VPM API may still be settling after reboot/reset
+        max_reg_attempts = 5
+        for attempt in range(1, max_reg_attempts + 1):
+            try:
+                register_ce(ce_ip, site_token)
+                break
+            except RuntimeError as e:
+                if attempt == max_reg_attempts:
+                    raise
+                print(f"[WARN] Registration attempt {attempt}/{max_reg_attempts} failed: {e}")
+                time.sleep(CE_RESET_POLL_INTERVAL)
+
         _ce_status = {"status": "PROVISIONING", "ce_ip": ce_ip}
 
         final_status = poll_ce_until_online(ce_ip)
