@@ -391,7 +391,7 @@ def _run_ce_registration(site_token):
                 stale = False
                 try:
                     config = get_ce_config(ce_ip)
-                    ce_token = (config.get("Token") or "").strip()
+                    ce_token = (config.get("Vpm", {}).get("Token") or "").strip()
                     new_token = (site_token or "").strip()
                     print(f"[DEBUG] CE token present: {bool(ce_token)}, "
                           f"new token present: {bool(new_token)}, "
