@@ -404,7 +404,7 @@ html, body { margin: 0; padding: 0; background: #1a1e2a; }
 }
 
 .card-title {
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -419,7 +419,7 @@ html, body { margin: 0; padding: 0; background: #1a1e2a; }
   gap: 0.375rem;
   padding: 0.3rem 0.875rem;
   border-radius: 9999px;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: 600;
   font-family: var(--mono);
   letter-spacing: 0.02em;
@@ -460,20 +460,20 @@ html, body { margin: 0; padding: 0; background: #1a1e2a; }
 }
 
 .meta-label {
-  font-size: 0.9375rem;
+  font-size: 1rem;
   color: var(--text-dim);
   font-weight: 500;
 }
 
 .meta-value {
-  font-size: 0.9375rem;
+  font-size: 1rem;
   color: var(--text);
   font-weight: 500;
 }
 
 .meta-value.mono {
   font-family: var(--mono);
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   color: var(--text-muted);
 }
 
@@ -481,7 +481,7 @@ html, body { margin: 0; padding: 0; background: #1a1e2a; }
   color: var(--accent);
   text-decoration: none;
   font-family: var(--mono);
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   transition: opacity 0.15s;
 }
 
@@ -497,7 +497,7 @@ html, body { margin: 0; padding: 0; background: #1a1e2a; }
 }
 
 .section-label {
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -515,7 +515,7 @@ html, body { margin: 0; padding: 0; background: #1a1e2a; }
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.625rem 0.75rem;
+  padding: 0.75rem 0.75rem;
   border-radius: 6px;
   background: var(--surface);
   transition: background 0.15s;
@@ -527,8 +527,8 @@ html, body { margin: 0; padding: 0; background: #1a1e2a; }
 
 .step-indicator {
   flex-shrink: 0;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -543,9 +543,9 @@ html, body { margin: 0; padding: 0; background: #1a1e2a; }
 .ind-gray { background: var(--border); color: var(--text-dim); }
 
 .step-indicator-sm {
-  width: 20px;
-  height: 20px;
-  font-size: 0.625rem;
+  width: 22px;
+  height: 22px;
+  font-size: 0.6875rem;
 }
 
 .step-nested {
@@ -566,33 +566,33 @@ html, body { margin: 0; padding: 0; background: #1a1e2a; }
 }
 
 .step-name {
-  font-size: 0.9375rem;
+  font-size: 1rem;
   font-weight: 500;
   color: var(--text);
 }
 
 .step-detail {
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   color: var(--text-dim);
 }
 
 .step-type {
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   color: var(--text-dim);
   font-family: var(--mono);
 }
 
 .step-error {
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   color: var(--red);
   font-family: var(--mono);
 }
 
 .step-badge {
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   font-family: var(--mono);
   font-weight: 500;
-  padding: 0.2rem 0.625rem;
+  padding: 0.25rem 0.75rem;
   border-radius: 4px;
   white-space: nowrap;
   flex-shrink: 0;
@@ -648,7 +648,7 @@ html, body { margin: 0; padding: 0; background: #1a1e2a; }
   margin-top: 1rem;
   padding-top: 0.75rem;
   border-top: 1px solid var(--border-subtle);
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-family: var(--mono);
   color: var(--text-dim);
 }
