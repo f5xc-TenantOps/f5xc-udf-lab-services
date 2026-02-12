@@ -156,10 +156,17 @@ let ceInterval = null
 
 // -- Computed --
 
+const ceFailed = computed(() => {
+  if (!ceStatus.value) return false
+  const s = (ceStatus.value.status || '').toUpperCase()
+  return s === 'FAILED' || s === 'TIMEOUT'
+})
+
 const overallStatus = computed(() => {
   if (!deployStatus.value) return ''
   const s = (deployStatus.value.status || '').toUpperCase()
   if (s === 'COMPLETED' && ceIsActive.value) return 'IN_PROGRESS'
+  if (s === 'COMPLETED' && ceFailed.value) return 'FAILED'
   return s
 })
 
@@ -216,14 +223,12 @@ const showCeRow = computed(() => {
 const ceIsActive = computed(() => {
   if (!ceStatus.value) return false
   const s = (ceStatus.value.status || '').toUpperCase()
-  return ['DISCOVERING', 'REGISTERING', 'RESETTING', 'PROVISIONING'].includes(s)
+  return ['DISCOVERING', 'REGISTERING', 'PROVISIONING'].includes(s)
 })
 
 const ceSubtext = computed(() => {
   if (!ceStatus.value) return ''
   const s = (ceStatus.value.status || '').toUpperCase()
-  if (s === 'RESETTING')
-    return ceStatus.value.reason || 'Resetting CE device — this may take several minutes'
   if (s === 'PROVISIONING')
     return 'Firmware upgrades and service restarts are expected during this phase'
   if (s === 'TIMEOUT')
@@ -235,7 +240,7 @@ const ceRowStatus = computed(() => {
   if (!ceStatus.value) return 'PENDING'
   const s = (ceStatus.value.status || ceStatus.value.state || '').toUpperCase()
   if (s === 'ONLINE' || s === 'REGISTERED') return 'SUCCESS'
-  if (['DISCOVERING', 'REGISTERING', 'RESETTING', 'PROVISIONING'].includes(s)) return 'IN_PROGRESS'
+  if (['DISCOVERING', 'REGISTERING', 'PROVISIONING'].includes(s)) return 'IN_PROGRESS'
   if (s === 'FAILED' || s === 'TIMEOUT') return 'FAILED'
   return 'PENDING'
 })

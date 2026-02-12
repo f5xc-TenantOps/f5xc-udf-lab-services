@@ -361,7 +361,8 @@ def _run_ce_registration(site_token):
 
     Detects stale registrations by comparing the token currently on the
     CE with the new site_token.  If they differ (or the config cannot be
-    read), the CE is factory-reset before re-registering.
+    read), the CE is bound to a dead site and a new UDF deployment is
+    required.
     """
     global _ce_status
     try:
@@ -370,11 +371,7 @@ def _run_ce_registration(site_token):
             register_ce,
             get_ce_status,
             get_ce_config,
-            factory_reset_ce,
             poll_ce_until_online,
-            poll_ce_until_state,
-            CE_RESET_SETTLE_TIME,
-            CE_RESET_POLL_INTERVAL,
         )
 
         _ce_status = {"status": "DISCOVERING"}
@@ -388,7 +385,6 @@ def _run_ce_registration(site_token):
 
             if current_state in ("ONLINE", "PROVISIONED"):
                 # CE thinks it's registered — verify the token matches
-                stale = False
                 try:
                     config = get_ce_config(ce_ip)
                     ce_token = (config.get("Token") or "").strip()
@@ -397,46 +393,26 @@ def _run_ce_registration(site_token):
                         _ce_status = {"status": "REGISTERED", "ce_ip": ce_ip, **current}
                         print(f"[INFO] CE already {current_state} with correct token — skipping registration")
                         return
-                    else:
-                        print(f"[WARN] CE token mismatch — stale registration detected")
-                        stale = True
+                    print(f"[ERROR] CE token mismatch — stale registration detected")
                 except RuntimeError as e:
-                    print(f"[WARN] Cannot read CE config ({e}) — assuming stale")
-                    stale = True
+                    print(f"[ERROR] Cannot read CE config ({e}) — assuming stale")
 
-                if stale:
-                    _ce_status = {
-                        "status": "RESETTING",
-                        "ce_ip": ce_ip,
-                        "reason": "Stale registration detected — factory resetting CE",
-                    }
-                    factory_reset_ce(ce_ip)
-                    time.sleep(CE_RESET_SETTLE_TIME)
-                    poll_result = poll_ce_until_state(ce_ip, ["WAITING_FOR_CONFIG"])
-                    if not poll_result.get("reached"):
-                        raise RuntimeError(
-                            f"CE did not return to WAITING_FOR_CONFIG after reset: "
-                            f"{poll_result.get('error', 'unknown')}"
-                        )
-                    # Fall through to normal registration below
+                _ce_status = {
+                    "status": "FAILED",
+                    "ce_ip": ce_ip,
+                    "error": (
+                        "CE is registered to a previous site that no longer exists. "
+                        "A new UDF deployment is needed to reset the CE."
+                    ),
+                }
+                return
 
         except RuntimeError:
             pass  # CE not responding yet, proceed with registration
 
         _ce_status = {"status": "REGISTERING", "ce_ip": ce_ip}
 
-        # Retry registration — VPM API may still be settling after reboot/reset
-        max_reg_attempts = 5
-        for attempt in range(1, max_reg_attempts + 1):
-            try:
-                register_ce(ce_ip, site_token)
-                break
-            except RuntimeError as e:
-                if attempt == max_reg_attempts:
-                    raise
-                print(f"[WARN] Registration attempt {attempt}/{max_reg_attempts} failed: {e}")
-                time.sleep(CE_RESET_POLL_INTERVAL)
-
+        register_ce(ce_ip, site_token)
         _ce_status = {"status": "PROVISIONING", "ce_ip": ce_ip}
 
         final_status = poll_ce_until_online(ce_ip)

@@ -22,14 +22,10 @@ CE_PASSWORD = os.environ.get("CE_PASSWORD", "Volterra123")
 CE_CONFIG_PATH = "/api/ves.io.vpm/introspect/write/ves.io.vpm.config/update"
 CE_HEALTH_PATH = "/api/ves.io.vpm/introspect/read/ves.io.vpm.health"
 CE_CONFIG_READ_PATH = "/api/ves.io.vpm/introspect/read/ves.io.vpm.config"
-CE_CLEAN_PATH = "/api/ves.io.vpm/introspect/write/ves.io.vpm.node/clean"
 
 CE_POLL_INTERVAL = 15       # seconds between polls
 CE_SILENCE_TIMEOUT = 600    # 10 min — give up if CE goes completely silent this long
 CE_OVERALL_TIMEOUT = 1500   # 25 min — hard cap, CE isn't coming up
-CE_RESET_SETTLE_TIME = 30   # seconds before polling after factory reset
-CE_RESET_BOOT_TIMEOUT = 300 # 5 min max wait for CE reboot
-CE_RESET_POLL_INTERVAL = 10 # seconds between post-reset polls
 
 
 def _sanitize_error(exc):
@@ -221,59 +217,3 @@ def get_ce_config(ce_ip):
         raise RuntimeError(f"CE config read failed: {_sanitize_error(e)}")
 
 
-def factory_reset_ce(ce_ip):
-    """Issue a factory reset (clean + reboot) to the CE via VPM.
-
-    The CE wipes its config and reboots, returning in WAITING_FOR_CONFIG.
-    Raises RuntimeError on failure.
-    """
-    url = f"https://{ce_ip}:{CE_PORT}{CE_CLEAN_PATH}"
-    try:
-        resp = http_requests.post(
-            url,
-            json={"reboot": True},
-            auth=(CE_USERNAME, CE_PASSWORD),
-            verify=False,
-            timeout=10,
-        )
-        resp.raise_for_status()
-        print(f"[INFO] Factory reset issued to {ce_ip}")
-        return resp.json()
-    except Exception as e:
-        raise RuntimeError(f"CE factory reset failed: {_sanitize_error(e)}")
-
-
-def poll_ce_until_state(ce_ip, target_states, timeout=CE_RESET_BOOT_TIMEOUT):
-    """Poll CE health until it reaches one of the target states or timeout.
-
-    Used after factory reset to wait for WAITING_FOR_CONFIG.
-
-    Args:
-        ce_ip: CE management IP address
-        target_states: set/list of state strings to wait for (uppercased)
-        timeout: max seconds to wait
-
-    Returns dict with 'reached' bool, 'state', and 'ce_ip'.
-    """
-    target_upper = {s.upper() for s in target_states}
-    start = time.time()
-
-    while True:
-        try:
-            status = get_ce_status(ce_ip)
-            state = (status.get("state") or "UNKNOWN").upper()
-            print(f"[INFO] CE state (post-reset poll): {state}")
-            if state in target_upper:
-                return {"reached": True, "state": state, "ce_ip": ce_ip}
-        except RuntimeError:
-            print(f"[WARN] CE unreachable during post-reset poll")
-
-        if time.time() - start > timeout:
-            return {
-                "reached": False,
-                "state": "UNKNOWN",
-                "ce_ip": ce_ip,
-                "error": f"CE did not reach {target_states} within {timeout}s",
-            }
-
-        time.sleep(CE_RESET_POLL_INTERVAL)
