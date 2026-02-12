@@ -143,6 +143,23 @@ class TestPollCeUntilOnline:
         mock_sleep.assert_not_called()
 
     @patch("ce_client.time.sleep")
+    @patch("ce_client.get_ce_status")
+    def test_poll_returns_registered_on_provisioned(self, mock_status, mock_sleep):
+        """CE returns PROVISIONED — treated as success like ONLINE."""
+        mock_status.return_value = {
+            "state": "PROVISIONED",
+            "hostname": "ce-1",
+            "os_version": "9.2024.30",
+            "public_ip": "203.0.113.1",
+        }
+
+        result = ce_client.poll_ce_until_online("10.1.1.5")
+
+        assert result["status"] == "REGISTERED"
+        assert result["state"] == "PROVISIONED"
+        mock_sleep.assert_not_called()
+
+    @patch("ce_client.time.sleep")
     @patch("ce_client.time.time")
     @patch("ce_client.get_ce_status")
     def test_poll_resets_silence_timeout_on_valid_response(

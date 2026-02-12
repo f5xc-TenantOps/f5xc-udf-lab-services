@@ -131,7 +131,7 @@ def poll_ce_until_online(ce_ip):
             last_state = status.get("state", "UNKNOWN")
             print(f"[INFO] CE state: {last_state}")
 
-            if last_state.upper() == "ONLINE":
+            if last_state.upper() in ("ONLINE", "PROVISIONED"):
                 return {
                     "status": "REGISTERED",
                     "ce_ip": ce_ip,
