@@ -173,8 +173,8 @@ const provisioningItems = computed(() => {
     if (key === 'resources') continue
     items.push({
       key: 'step-' + key,
-      label: data.name || data.email || formatStatus(key),
-      subtitle: key,
+      label: formatStatus(key),
+      subtitle: data.name || data.email || null,
       status: data.status,
       error: data.error || null,
     })
