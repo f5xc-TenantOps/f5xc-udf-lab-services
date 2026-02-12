@@ -384,27 +384,38 @@ def _run_ce_registration(site_token):
             current_state = (current.get("state") or "").upper()
 
             if current_state in ("ONLINE", "PROVISIONED"):
-                # CE thinks it's registered — verify the token matches
+                # CE is registered — check if the token matches to
+                # distinguish restart recovery from stale registration.
+                # Only flag stale when we positively read a DIFFERENT token.
+                # Missing/empty token or config read failure → trust CE state.
+                stale = False
                 try:
                     config = get_ce_config(ce_ip)
                     ce_token = (config.get("Token") or "").strip()
                     new_token = (site_token or "").strip()
-                    if ce_token == new_token:
-                        _ce_status = {"status": "REGISTERED", "ce_ip": ce_ip, **current}
-                        print(f"[INFO] CE already {current_state} with correct token — skipping registration")
-                        return
-                    print(f"[ERROR] CE token mismatch — stale registration detected")
+                    print(f"[DEBUG] CE token present: {bool(ce_token)}, "
+                          f"new token present: {bool(new_token)}, "
+                          f"match: {ce_token == new_token if ce_token else 'n/a'}")
+                    if ce_token and new_token and ce_token != new_token:
+                        print(f"[ERROR] CE token mismatch — stale registration detected")
+                        stale = True
                 except RuntimeError as e:
-                    print(f"[ERROR] Cannot read CE config ({e}) — assuming stale")
+                    print(f"[WARN] Cannot read CE config ({e}) — treating as valid")
 
-                _ce_status = {
-                    "status": "FAILED",
-                    "ce_ip": ce_ip,
-                    "error": (
-                        "CE is registered to a previous site that no longer exists. "
-                        "A new UDF deployment is needed to reset the CE."
-                    ),
-                }
+                if stale:
+                    _ce_status = {
+                        "status": "FAILED",
+                        "ce_ip": ce_ip,
+                        "error": (
+                            "CE is registered to a previous site that no longer exists. "
+                            "A new UDF deployment is needed to reset the CE."
+                        ),
+                    }
+                    return
+
+                # Restart recovery — CE is already registered with this site
+                _ce_status = {"status": "REGISTERED", "ce_ip": ce_ip, **current}
+                print(f"[INFO] CE already {current_state} — skipping registration")
                 return
 
         except RuntimeError:
