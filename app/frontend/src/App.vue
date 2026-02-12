@@ -354,8 +354,8 @@ html, body { margin: 0; padding: 0; background: #22242c; }
 .app {
   /* XC Console dark mode palette */
   --bg: #22242c;
-  --surface: #292b34;
-  --surface-raised: #353842;
+  --surface: #303444;
+  --surface-raised: #3a3e4e;
   --border: #353842;
   --border-subtle: #2e3038;
   --text: #f0f2f7;
