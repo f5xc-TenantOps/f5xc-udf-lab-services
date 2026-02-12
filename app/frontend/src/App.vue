@@ -88,7 +88,8 @@
                 <div class="step-content">
                   <span class="step-name">CE Registration</span>
                   <span v-if="ceStatus?.ce_ip" class="step-detail">{{ ceStatus.ce_ip }}</span>
-                  <span v-if="ceStatus?.error" class="step-error">{{ ceStatus.error }}</span>
+                  <span v-if="ceSubtext" class="step-type">{{ ceSubtext }}</span>
+                  <span v-if="ceStatus?.error && ceRowStatus === 'FAILED'" class="step-error">{{ ceStatus.error }}</span>
                 </div>
                 <span :class="['step-badge', stepBadgeClass(ceRowStatus)]">
                   {{ formatStatus(ceDisplayStatus) }}
@@ -208,14 +209,24 @@ const showCeRow = computed(() => {
 const ceIsActive = computed(() => {
   if (!ceStatus.value) return false
   const s = (ceStatus.value.status || '').toUpperCase()
-  return ['DISCOVERING', 'REGISTERING', 'POLLING'].includes(s)
+  return ['DISCOVERING', 'REGISTERING', 'PROVISIONING'].includes(s)
+})
+
+const ceSubtext = computed(() => {
+  if (!ceStatus.value) return ''
+  const s = (ceStatus.value.status || '').toUpperCase()
+  if (s === 'PROVISIONING')
+    return 'Firmware upgrades and service restarts are expected during this phase'
+  if (s === 'TIMEOUT')
+    return ceStatus.value.error || 'CE did not come online'
+  return ''
 })
 
 const ceRowStatus = computed(() => {
   if (!ceStatus.value) return 'PENDING'
   const s = (ceStatus.value.status || ceStatus.value.state || '').toUpperCase()
   if (s === 'ONLINE' || s === 'REGISTERED') return 'SUCCESS'
-  if (['DISCOVERING', 'REGISTERING', 'POLLING'].includes(s)) return 'IN_PROGRESS'
+  if (['DISCOVERING', 'REGISTERING', 'PROVISIONING'].includes(s)) return 'IN_PROGRESS'
   if (s === 'FAILED' || s === 'TIMEOUT') return 'FAILED'
   return 'PENDING'
 })
@@ -251,6 +262,7 @@ const RESOURCE_TYPE_LABELS = {
   http_lb: 'HTTP Load Balancer',
   tcp_lb: 'TCP Load Balancer',
   waf_policy: 'WAF Policy',
+  securemesh_site_v2: 'Secure Mesh Site',
 }
 
 function formatResourceType(type) {
