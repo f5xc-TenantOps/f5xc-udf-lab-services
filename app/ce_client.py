@@ -36,17 +36,12 @@ def _sanitize_error(exc):
     references which are confusing for users.
     """
     msg = str(exc)
-    # Strip HTTPSConnectionPool / HTTPConnectionPool wrapper
-    for pool_prefix in ("HTTPSConnectionPool", "HTTPConnectionPool"):
-        if pool_prefix in msg:
-            caused = msg.find("Caused by ")
-            if caused != -1:
-                msg = msg[caused + len("Caused by "):]
-            else:
-                colon = msg.find(": ", msg.find(pool_prefix))
-                if colon != -1:
-                    msg = msg[colon + 2:]
-            break
+    # Strip HTTPS?Connection(Pool)?(host=..., port=...): prefix
+    msg = re.sub(r"HTTPS?Connection(?:Pool)?\([^)]*\):\s*", "", msg)
+    # Strip "Max retries exceeded with url: /path " noise
+    msg = re.sub(r"Max retries exceeded with url: \S+\s*", "", msg)
+    # Strip "(Caused by " wrapper
+    msg = re.sub(r"\(?Caused by\s*", "", msg)
     # Strip exception class wrappers like NewConnectionError('...')
     msg = re.sub(r"\w+Error\(['\"]?", "", msg)
     # Strip <urllib3.connection.HTTPSConnection object at 0x...> references

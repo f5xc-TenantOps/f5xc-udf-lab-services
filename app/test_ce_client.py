@@ -337,6 +337,17 @@ class TestSanitizeError:
         assert "NewConnectionError" not in result
         assert "Connection refused" in result
 
+    def test_strips_no_pool_variant(self):
+        """Strips HTTPSConnection(host=...) without Pool suffix."""
+        exc = Exception(
+            "HTTPSConnection(host='10.1.1.5', port=65500): "
+            "Failed to establish a new connection: "
+            "[Errno 113] No route to host"
+        )
+        result = ce_client._sanitize_error(exc)
+        assert "HTTPSConnection" not in result
+        assert "No route to host" in result
+
     def test_truncates_long_messages(self):
         """Messages over 200 chars are truncated."""
         exc = Exception("x" * 300)
