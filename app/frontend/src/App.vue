@@ -180,13 +180,13 @@ const provisioningItems = computed(() => {
     })
   }
 
-  // Individual resources — each on its own line
+  // Individual resources — type as main label, name as subtitle
   const resources = deployStatus.value.resources || {}
   for (const [name, data] of Object.entries(resources)) {
     items.push({
       key: 'res-' + name,
-      label: name,
-      subtitle: formatResourceType(data.type),
+      label: formatResourceType(data.type) || name,
+      subtitle: name,
       status: data.status,
       error: data.error || null,
     })
@@ -247,10 +247,10 @@ function formatStatus(status) {
 }
 
 const RESOURCE_TYPE_LABELS = {
-  origin_pool: 'origin pool',
-  http_lb: 'http load balancer',
-  tcp_lb: 'tcp load balancer',
-  waf_policy: 'WAF policy',
+  origin_pool: 'Origin Pool',
+  http_lb: 'HTTP Load Balancer',
+  tcp_lb: 'TCP Load Balancer',
+  waf_policy: 'WAF Policy',
 }
 
 function formatResourceType(type) {
