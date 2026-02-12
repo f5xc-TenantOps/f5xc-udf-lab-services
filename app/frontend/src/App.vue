@@ -1,5 +1,5 @@
 <template>
-  <div class="app">
+  <div :class="['app', { dark: darkMode }]">
     <!-- Header -->
     <header class="header">
       <img src="https://www.logo.wine/a/logo/F5_Networks/F5_Networks-Logo.wine.svg" alt="F5" class="logo" />
@@ -7,6 +7,12 @@
         <h1>Lab Deployment Status</h1>
         <span v-if="metadata" class="header-email">{{ metadata.email }}</span>
       </div>
+      <button class="theme-toggle" @click="toggleTheme" :title="darkMode ? 'Switch to light mode' : 'Switch to dark mode'">
+        <span class="toggle-track">
+          <span class="toggle-thumb"></span>
+        </span>
+        <span class="toggle-label">{{ darkMode ? 'Dark' : 'Light' }}</span>
+      </button>
     </header>
 
     <main class="main">
@@ -143,16 +149,35 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 
 const metadata = ref(null)
 const deployStatus = ref(null)
 const ceStatus = ref(null)
 const showErrorLog = ref(false)
 const lastFetchTime = ref(null)
+const darkMode = ref(false)
 
 let statusInterval = null
 let ceInterval = null
+
+// -- Theme --
+
+function toggleTheme() {
+  darkMode.value = !darkMode.value
+  localStorage.setItem('tops-theme', darkMode.value ? 'dark' : 'light')
+  applyBodyTheme()
+}
+
+function resolveTheme() {
+  const saved = localStorage.getItem('tops-theme')
+  if (saved) return saved === 'dark'
+  return window.matchMedia('(prefers-color-scheme: dark)').matches
+}
+
+function applyBodyTheme() {
+  document.body.style.background = darkMode.value ? '#22242c' : '#f5f6f8'
+}
 
 // -- Computed --
 
@@ -338,7 +363,22 @@ async function fetchCeStatus() {
   } catch (e) { console.warn('ce:', e) }
 }
 
+let mediaQuery = null
+
 onMounted(() => {
+  // Theme: saved preference > OS preference
+  darkMode.value = resolveTheme()
+  applyBodyTheme()
+
+  // Follow OS changes when no explicit preference is saved
+  mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+  mediaQuery.addEventListener('change', (e) => {
+    if (!localStorage.getItem('tops-theme')) {
+      darkMode.value = e.matches
+      applyBodyTheme()
+    }
+  })
+
   fetchMetadata()
   fetchDeployStatus()
   fetchCeStatus()
@@ -354,12 +394,52 @@ onUnmounted(() => {
 
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-html, body { margin: 0; padding: 0; background: #22242c; }
+html, body { margin: 0; padding: 0; background: #f5f6f8; transition: background 0.2s; }
+@media (prefers-color-scheme: dark) {
+  html, body { background: #22242c; }
+}
 </style>
 
 <style scoped>
 .app {
-  /* XC Console dark mode palette */
+  /* Light mode palette (default) */
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --surface-raised: #f0f1f4;
+  --border: #e2e4e9;
+  --border-subtle: #ecedf0;
+  --text: #1a1d26;
+  --text-secondary: #5f6776;
+  --text-muted: #8b91a0;
+  --heading: #1a1d26;
+  --accent: #e4002b;
+  --blue: #3b5fe5;
+  --green: #1a9e48;
+  --green-dim: rgba(26, 158, 72, 0.10);
+  --amber: #b88a00;
+  --amber-dim: rgba(184, 138, 0, 0.10);
+  --red: #d93a20;
+  --red-dim: rgba(217, 58, 32, 0.08);
+  --font: 'Inter', system-ui, -apple-system, sans-serif;
+  --mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Segoe UI Mono', monospace;
+  --scrollbar-track: #f0f1f4;
+  --scrollbar-thumb: #c8cbd2;
+  --scrollbar-hover: #a8abb4;
+  --selection-bg: #d0d8f0;
+  --selection-fg: #1a1d26;
+
+  min-height: 100vh;
+  background: var(--bg);
+  font-family: var(--font);
+  color: var(--text);
+  line-height: 1.5;
+  transition: background 0.2s, color 0.2s;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Dark mode overrides */
+.app.dark {
   --bg: #22242c;
   --surface: #303444;
   --surface-raised: #3a3e4e;
@@ -368,7 +448,7 @@ html, body { margin: 0; padding: 0; background: #22242c; }
   --text: #f0f2f7;
   --text-secondary: #9ba1ad;
   --text-muted: #6f7787;
-  --accent: #e4002b;
+  --heading: #ffffff;
   --blue: #4f73ff;
   --green: #35d068;
   --green-dim: rgba(53, 208, 104, 0.12);
@@ -376,16 +456,11 @@ html, body { margin: 0; padding: 0; background: #22242c; }
   --amber-dim: rgba(255, 196, 0, 0.12);
   --red: #f94627;
   --red-dim: rgba(249, 70, 39, 0.10);
-  --font: 'Inter', system-ui, -apple-system, sans-serif;
-  --mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Segoe UI Mono', monospace;
-
-  min-height: 100vh;
-  background: var(--bg);
-  font-family: var(--font);
-  color: var(--text);
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  --scrollbar-track: #292b34;
+  --scrollbar-thumb: #454853;
+  --scrollbar-hover: #5f6776;
+  --selection-bg: #272e49;
+  --selection-fg: #fff;
 }
 
 /* -- Header -- */
@@ -396,6 +471,7 @@ html, body { margin: 0; padding: 0; background: #22242c; }
   padding: 1.25rem 2rem;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+  transition: background 0.2s, border-color 0.2s;
 }
 
 .logo {
@@ -416,13 +492,62 @@ html, body { margin: 0; padding: 0; background: #22242c; }
   font-weight: 600;
   margin: 0;
   letter-spacing: -0.01em;
-  color: #fff;
+  color: var(--heading);
 }
 
 .header-email {
   font-size: 0.8125rem;
   color: var(--text-secondary);
   font-weight: 400;
+}
+
+/* -- Theme toggle -- */
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem;
+  flex-shrink: 0;
+}
+
+.toggle-track {
+  position: relative;
+  width: 34px;
+  height: 18px;
+  background: var(--border);
+  border-radius: 9999px;
+  transition: background 0.2s;
+}
+
+.app.dark .toggle-track {
+  background: var(--text-muted);
+}
+
+.toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  background: var(--surface);
+  border-radius: 50%;
+  transition: transform 0.2s, background 0.2s;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+.app.dark .toggle-thumb {
+  transform: translateX(16px);
+}
+
+.toggle-label {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 @keyframes pulse {
@@ -444,9 +569,14 @@ html, body { margin: 0; padding: 0; background: #22242c; }
   border-radius: 12px;
   padding: 1.5rem 1.75rem;
   margin-bottom: 1rem;
+  transition: background 0.2s, border-color 0.2s;
 }
 
 .card-error {
+  border-color: rgba(217, 58, 32, 0.25);
+}
+
+.app.dark .card-error {
   border-color: rgba(249, 70, 39, 0.25);
 }
 
@@ -490,7 +620,7 @@ html, body { margin: 0; padding: 0; background: #22242c; }
 .badge-amber .badge-dot { background: var(--amber); animation: pulse 2s ease-in-out infinite; }
 .badge-red { background: var(--red-dim); color: var(--red); }
 .badge-red .badge-dot { background: var(--red); }
-.badge-gray { background: rgba(95, 103, 118, 0.15); color: var(--text-muted); }
+.badge-gray { background: rgba(95, 103, 118, 0.10); color: var(--text-muted); }
 .badge-gray .badge-dot { background: var(--text-muted); }
 
 /* -- Deployment metadata -- */
@@ -594,8 +724,7 @@ html, body { margin: 0; padding: 0; background: #22242c; }
 .ind-green { background: var(--green-dim); color: var(--green); }
 .ind-amber { background: var(--amber-dim); color: var(--amber); }
 .ind-red { background: var(--red-dim); color: var(--red); }
-.ind-gray { background: rgba(95, 103, 118, 0.15); color: var(--text-muted); }
-
+.ind-gray { background: rgba(95, 103, 118, 0.10); color: var(--text-muted); }
 
 .icon-check { font-size: 0.6875rem; line-height: 1; }
 .icon-x { font-size: 0.6875rem; line-height: 1; }
@@ -627,7 +756,6 @@ html, body { margin: 0; padding: 0; background: #22242c; }
 }
 
 .step-error {
-  font-size: 0.8125rem;
   color: var(--red);
   font-family: var(--mono);
   font-size: 0.75rem;
@@ -645,7 +773,7 @@ html, body { margin: 0; padding: 0; background: #22242c; }
 .sbadge-green { background: var(--green-dim); color: var(--green); }
 .sbadge-amber { background: var(--amber-dim); color: var(--amber); }
 .sbadge-red { background: var(--red-dim); color: var(--red); }
-.sbadge-gray { background: rgba(95, 103, 118, 0.15); color: var(--text-muted); }
+.sbadge-gray { background: rgba(95, 103, 118, 0.10); color: var(--text-muted); }
 
 /* -- Loading -- */
 .loading {
@@ -782,17 +910,17 @@ html, body { margin: 0; padding: 0; background: #22242c; }
   margin-top: 0.75rem;
   padding: 0.75rem;
   background: var(--red-dim);
-  border: 1px solid rgba(249, 70, 39, 0.2);
+  border: 1px solid rgba(217, 58, 32, 0.2);
   color: var(--red);
   border-radius: 8px;
   font-size: 0.8125rem;
   font-family: var(--mono);
 }
 
-/* -- Scrollbar (XC console style) -- */
+/* -- Scrollbar -- */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: #292b34; }
-::-webkit-scrollbar-thumb { background: #454853; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #5f6776; }
-::selection { background-color: #272e49; color: #fff; }
+::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
+::selection { background-color: var(--selection-bg); color: var(--selection-fg); }
 </style>
