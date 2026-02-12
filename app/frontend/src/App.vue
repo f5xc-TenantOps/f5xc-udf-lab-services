@@ -749,8 +749,8 @@ html, body { margin: 0; padding: 0; background: #f5f6f8; transition: background 
 
 .step-error {
   color: var(--red);
-  font-family: var(--mono);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
 }
 
 .step-badge {
