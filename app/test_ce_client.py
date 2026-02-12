@@ -283,3 +283,184 @@ class TestPollCeUntilOnline:
         assert result["status"] == "TIMEOUT"
         assert result["reason"] == "silence"
         # last_contact was never updated from 0
+
+
+# ---------------------------------------------------------------------------
+# _sanitize_error
+# ---------------------------------------------------------------------------
+class TestSanitizeError:
+    """Tests for _sanitize_error helper."""
+
+    def test_strips_connection_pool_prefix(self):
+        """Strips HTTPSConnectionPool wrapper and extracts inner message."""
+        exc = Exception(
+            "HTTPSConnectionPool(host='10.1.1.5', port=65500): "
+            "Max retries exceeded with url: /api/test "
+            "Caused by NewConnectionError('<urllib3...>: "
+            "Failed to establish a new connection: [Errno 61] Connection refused')"
+        )
+        result = ce_client._sanitize_error(exc)
+        assert "HTTPSConnectionPool" not in result
+        assert "Connection refused" in result
+
+    def test_strips_http_pool_prefix(self):
+        """Strips HTTPConnectionPool wrapper too."""
+        exc = Exception(
+            "HTTPConnectionPool(host='10.1.1.5', port=80): "
+            "Caused by ReadTimeoutError('timeout')"
+        )
+        result = ce_client._sanitize_error(exc)
+        assert "HTTPConnectionPool" not in result
+        assert "timeout" in result
+
+    def test_passes_through_simple_message(self):
+        """Non-pool errors pass through unchanged."""
+        exc = Exception("Connection refused")
+        result = ce_client._sanitize_error(exc)
+        assert result == "Connection refused"
+
+    def test_truncates_long_messages(self):
+        """Messages over 200 chars are truncated."""
+        exc = Exception("x" * 300)
+        result = ce_client._sanitize_error(exc)
+        assert len(result) == 203  # 200 + "..."
+        assert result.endswith("...")
+
+
+# ---------------------------------------------------------------------------
+# get_ce_config
+# ---------------------------------------------------------------------------
+class TestGetCeConfig:
+    """Tests for get_ce_config."""
+
+    @patch("ce_client.http_requests")
+    def test_returns_config_with_token(self, mock_requests):
+        """Returns parsed config dict including Token field."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"Token": "jwt-abc-123", "Cluster": "test"}
+        mock_requests.get.return_value = mock_resp
+
+        result = ce_client.get_ce_config("10.1.1.5")
+
+        assert result["Token"] == "jwt-abc-123"
+        mock_requests.get.assert_called_once()
+        call_url = mock_requests.get.call_args[0][0]
+        assert ce_client.CE_CONFIG_READ_PATH in call_url
+
+    @patch("ce_client.http_requests")
+    def test_raises_on_unreachable(self, mock_requests):
+        """Raises RuntimeError when CE is unreachable."""
+        mock_requests.get.side_effect = ConnectionError("refused")
+
+        with pytest.raises(RuntimeError, match="CE config read failed"):
+            ce_client.get_ce_config("10.1.1.5")
+
+
+# ---------------------------------------------------------------------------
+# factory_reset_ce
+# ---------------------------------------------------------------------------
+class TestFactoryResetCe:
+    """Tests for factory_reset_ce."""
+
+    @patch("ce_client.http_requests")
+    def test_posts_reboot_true(self, mock_requests):
+        """Posts reboot:true to the clean endpoint."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"status": "ok"}
+        mock_requests.post.return_value = mock_resp
+
+        result = ce_client.factory_reset_ce("10.1.1.5")
+
+        assert result == {"status": "ok"}
+        call_kwargs = mock_requests.post.call_args
+        assert call_kwargs[1]["json"] == {"reboot": True}
+        call_url = call_kwargs[0][0]
+        assert ce_client.CE_CLEAN_PATH in call_url
+
+    @patch("ce_client.http_requests")
+    def test_raises_on_failure(self, mock_requests):
+        """Raises RuntimeError on POST failure."""
+        mock_requests.post.side_effect = ConnectionError("refused")
+
+        with pytest.raises(RuntimeError, match="CE factory reset failed"):
+            ce_client.factory_reset_ce("10.1.1.5")
+
+
+# ---------------------------------------------------------------------------
+# poll_ce_until_state
+# ---------------------------------------------------------------------------
+class TestPollCeUntilState:
+    """Tests for poll_ce_until_state."""
+
+    @patch("ce_client.time.sleep")
+    @patch("ce_client.get_ce_status")
+    def test_reaches_target_immediately(self, mock_status, mock_sleep):
+        """Returns immediately when CE is already in target state."""
+        mock_status.return_value = {
+            "state": "WAITING_FOR_CONFIG",
+            "hostname": "",
+            "os_version": "",
+            "public_ip": "",
+        }
+
+        result = ce_client.poll_ce_until_state(
+            "10.1.1.5", ["WAITING_FOR_CONFIG"], timeout=60
+        )
+
+        assert result["reached"] is True
+        assert result["state"] == "WAITING_FOR_CONFIG"
+        mock_sleep.assert_not_called()
+
+    @patch("ce_client.time.sleep")
+    @patch("ce_client.time.time")
+    @patch("ce_client.get_ce_status")
+    def test_times_out(self, mock_status, mock_time, mock_sleep):
+        """Returns reached=False when timeout elapses."""
+        times = iter([0, 301])
+        mock_time.side_effect = lambda: next(times)
+
+        mock_status.return_value = {
+            "state": "REBOOTING",
+            "hostname": "",
+            "os_version": "",
+            "public_ip": "",
+        }
+
+        result = ce_client.poll_ce_until_state(
+            "10.1.1.5", ["WAITING_FOR_CONFIG"], timeout=300
+        )
+
+        assert result["reached"] is False
+        assert "error" in result
+
+    @patch("ce_client.time.sleep")
+    @patch("ce_client.time.time")
+    @patch("ce_client.get_ce_status")
+    def test_survives_unreachable_then_reaches(self, mock_status, mock_time, mock_sleep):
+        """CE is unreachable initially, then reaches target state."""
+        times = iter([0, 10, 20])
+        mock_time.side_effect = lambda: next(times)
+
+        call_count = [0]
+        def status_side_effect(ip):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise RuntimeError("CE not responding")
+            return {
+                "state": "WAITING_FOR_CONFIG",
+                "hostname": "",
+                "os_version": "",
+                "public_ip": "",
+            }
+
+        mock_status.side_effect = status_side_effect
+
+        result = ce_client.poll_ce_until_state(
+            "10.1.1.5", ["WAITING_FOR_CONFIG"], timeout=300
+        )
+
+        assert result["reached"] is True
+        assert result["state"] == "WAITING_FOR_CONFIG"
+        assert mock_sleep.call_count == 1

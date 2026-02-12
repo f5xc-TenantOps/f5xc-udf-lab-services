@@ -20,10 +20,49 @@ CE_USERNAME = os.environ.get("CE_USERNAME", "admin")
 CE_PASSWORD = os.environ.get("CE_PASSWORD", "Volterra123")
 CE_CONFIG_PATH = "/api/ves.io.vpm/introspect/write/ves.io.vpm.config/update"
 CE_HEALTH_PATH = "/api/ves.io.vpm/introspect/read/ves.io.vpm.health"
+CE_CONFIG_READ_PATH = "/api/ves.io.vpm/introspect/read/ves.io.vpm.config"
+CE_CLEAN_PATH = "/api/ves.io.vpm/introspect/write/ves.io.vpm.node/clean"
 
 CE_POLL_INTERVAL = 15       # seconds between polls
 CE_SILENCE_TIMEOUT = 600    # 10 min — give up if CE goes completely silent this long
 CE_OVERALL_TIMEOUT = 1500   # 25 min — hard cap, CE isn't coming up
+CE_RESET_SETTLE_TIME = 30   # seconds before polling after factory reset
+CE_RESET_BOOT_TIMEOUT = 300 # 5 min max wait for CE reboot
+CE_RESET_POLL_INTERVAL = 10 # seconds between post-reset polls
+
+
+def _sanitize_error(exc):
+    """Strip noisy connection-pool details from exception messages.
+
+    Raw urllib3/requests exceptions include the full
+    HTTPSConnectionPool(...) prefix which is confusing for users.
+    """
+    msg = str(exc)
+    # Strip HTTPSConnectionPool / HTTPConnectionPool wrapper
+    pool_prefix = "HTTPSConnectionPool"
+    if pool_prefix not in msg:
+        pool_prefix = "HTTPConnectionPool"
+    if pool_prefix in msg:
+        # Find "Caused by ..." or ": " after the pool prefix
+        caused = msg.find("Caused by ")
+        if caused != -1:
+            msg = msg[caused + len("Caused by "):]
+            # Strip wrapping parens/class name like "NewConnectionError('<...>')"
+            if "(" in msg:
+                inner_start = msg.find("(")
+                inner_end = msg.rfind(")")
+                if inner_start != -1 and inner_end > inner_start:
+                    msg = msg[inner_start + 1 : inner_end]
+            # Strip surrounding quotes
+            msg = msg.strip("'\"")
+        else:
+            colon = msg.find(": ", len(pool_prefix))
+            if colon != -1:
+                msg = msg[colon + 2:]
+    # Truncate very long messages
+    if len(msg) > 200:
+        msg = msg[:200] + "..."
+    return msg
 
 
 def discover_ce_ip():
@@ -79,7 +118,7 @@ def register_ce(ce_ip, site_token):
         print(f"[INFO] CE registration submitted to {ce_ip}")
         return resp.json()
     except Exception as e:
-        raise RuntimeError(f"CE registration failed: {e}")
+        raise RuntimeError(f"CE registration failed: {_sanitize_error(e)}")
 
 
 def get_ce_status(ce_ip):
@@ -105,7 +144,7 @@ def get_ce_status(ce_ip):
             "public_ip": data.get("public_ip", ""),
         }
     except Exception as e:
-        raise RuntimeError(f"CE not responding: {e}")
+        raise RuntimeError(f"CE not responding: {_sanitize_error(e)}")
 
 
 def poll_ce_until_online(ce_ip):
@@ -159,3 +198,82 @@ def poll_ce_until_online(ce_ip):
             }
 
         time.sleep(CE_POLL_INTERVAL)
+
+
+def get_ce_config(ce_ip):
+    """Read the CE VPM config to retrieve the current registration token.
+
+    Returns the parsed JSON response dict (contains a 'Token' field when
+    the CE has been registered).
+    Raises RuntimeError if the CE is unreachable.
+    """
+    url = f"https://{ce_ip}:{CE_PORT}{CE_CONFIG_READ_PATH}"
+    try:
+        resp = http_requests.get(
+            url,
+            auth=(CE_USERNAME, CE_PASSWORD),
+            verify=False,
+            timeout=5,
+        )
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        raise RuntimeError(f"CE config read failed: {_sanitize_error(e)}")
+
+
+def factory_reset_ce(ce_ip):
+    """Issue a factory reset (clean + reboot) to the CE via VPM.
+
+    The CE wipes its config and reboots, returning in WAITING_FOR_CONFIG.
+    Raises RuntimeError on failure.
+    """
+    url = f"https://{ce_ip}:{CE_PORT}{CE_CLEAN_PATH}"
+    try:
+        resp = http_requests.post(
+            url,
+            json={"reboot": True},
+            auth=(CE_USERNAME, CE_PASSWORD),
+            verify=False,
+            timeout=10,
+        )
+        resp.raise_for_status()
+        print(f"[INFO] Factory reset issued to {ce_ip}")
+        return resp.json()
+    except Exception as e:
+        raise RuntimeError(f"CE factory reset failed: {_sanitize_error(e)}")
+
+
+def poll_ce_until_state(ce_ip, target_states, timeout=CE_RESET_BOOT_TIMEOUT):
+    """Poll CE health until it reaches one of the target states or timeout.
+
+    Used after factory reset to wait for WAITING_FOR_CONFIG.
+
+    Args:
+        ce_ip: CE management IP address
+        target_states: set/list of state strings to wait for (uppercased)
+        timeout: max seconds to wait
+
+    Returns dict with 'reached' bool, 'state', and 'ce_ip'.
+    """
+    target_upper = {s.upper() for s in target_states}
+    start = time.time()
+
+    while True:
+        try:
+            status = get_ce_status(ce_ip)
+            state = (status.get("state") or "UNKNOWN").upper()
+            print(f"[INFO] CE state (post-reset poll): {state}")
+            if state in target_upper:
+                return {"reached": True, "state": state, "ce_ip": ce_ip}
+        except RuntimeError:
+            print(f"[WARN] CE unreachable during post-reset poll")
+
+        if time.time() - start > timeout:
+            return {
+                "reached": False,
+                "state": "UNKNOWN",
+                "ce_ip": ce_ip,
+                "error": f"CE did not reach {target_states} within {timeout}s",
+            }
+
+        time.sleep(CE_RESET_POLL_INTERVAL)
