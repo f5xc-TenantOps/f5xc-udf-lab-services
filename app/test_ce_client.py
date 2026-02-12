@@ -32,7 +32,7 @@ class TestDiscoverCeIp:
         mock_resp.status_code = 400
         mock_requests.get.return_value = mock_resp
 
-        with pytest.raises(RuntimeError, match="No 'role' user tag found"):
+        with pytest.raises(RuntimeError, match="CE not found"):
             ce_client.discover_ce_ip()
 
     @patch("ce_client.http_requests")
@@ -40,10 +40,11 @@ class TestDiscoverCeIp:
         """Raises RuntimeError when no instances are tagged."""
         mock_resp = MagicMock()
         mock_resp.status_code = 200
+        mock_resp.ok = True
         mock_resp.json.return_value = []
         mock_requests.get.return_value = mock_resp
 
-        with pytest.raises(RuntimeError, match="No instances tagged role=CE"):
+        with pytest.raises(RuntimeError, match="CE not found"):
             ce_client.discover_ce_ip()
 
     @patch("ce_client.http_requests")
@@ -51,7 +52,7 @@ class TestDiscoverCeIp:
         """Raises RuntimeError on network failure."""
         mock_requests.get.side_effect = ConnectionError("no route")
 
-        with pytest.raises(RuntimeError, match="Cannot discover CE"):
+        with pytest.raises(RuntimeError, match="CE discovery failed"):
             ce_client.discover_ce_ip()
 
 
@@ -85,6 +86,7 @@ class TestRegisterCe:
             ce_client.register_ce("10.1.1.5", "jwt-token")
 
 
+
 # ---------------------------------------------------------------------------
 # get_ce_status
 # ---------------------------------------------------------------------------
@@ -114,7 +116,7 @@ class TestGetCeStatus:
         """Raises RuntimeError when CE is unreachable."""
         mock_requests.get.side_effect = ConnectionError("timeout")
 
-        with pytest.raises(RuntimeError, match="CE not responding"):
+        with pytest.raises(RuntimeError, match="CE is not responding"):
             ce_client.get_ce_status("10.1.1.5")
 
 
@@ -227,7 +229,7 @@ class TestPollCeUntilOnline:
 
         assert result["status"] == "TIMEOUT"
         assert result["reason"] == "silence"
-        assert "not responded" in result["error"]
+        assert "stopped responding" in result["error"]
 
     @patch("ce_client.time.sleep")
     @patch("ce_client.time.time")
@@ -382,5 +384,5 @@ class TestGetCeConfig:
         """Raises RuntimeError when CE is unreachable."""
         mock_requests.get.side_effect = ConnectionError("refused")
 
-        with pytest.raises(RuntimeError, match="CE config read failed"):
+        with pytest.raises(RuntimeError, match="Cannot read CE configuration"):
             ce_client.get_ce_config("10.1.1.5")

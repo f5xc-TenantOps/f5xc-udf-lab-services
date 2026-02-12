@@ -67,23 +67,19 @@ def discover_ce_ip():
         resp = http_requests.get(
             f"{METADATA_BASE_URL}/userTags/name/role/value/CE", timeout=5
         )
-        if resp.status_code == 400:
+        if resp.status_code == 400 or (resp.ok and not resp.json()):
             raise RuntimeError(
-                "No 'role' user tag found. Add a user tag role=CE to the "
-                "CE instance in this UDF deployment."
+                "CE not found — add a user tag role=CE to the CE instance in UDF"
             )
         resp.raise_for_status()
-        results = resp.json()
-        if not results:
-            raise RuntimeError(
-                "No instances tagged role=CE found. Tag the CE instance "
-                "with user tag role=CE in UDF."
-            )
-        return results[0]["mgmtIp"]
+        return resp.json()[0]["mgmtIp"]
     except RuntimeError:
         raise
     except Exception as e:
-        raise RuntimeError(f"Cannot discover CE: {e}")
+        print(f"[ERROR] CE discovery failed: {e}")
+        raise RuntimeError(
+            "CE discovery failed — UDF metadata service is not reachable"
+        )
 
 
 def register_ce(ce_ip, site_token):
@@ -109,7 +105,10 @@ def register_ce(ce_ip, site_token):
         print(f"[INFO] CE registration submitted to {ce_ip}")
         return resp.json()
     except Exception as e:
-        raise RuntimeError(f"CE registration failed: {_sanitize_error(e)}")
+        print(f"[ERROR] CE registration POST failed: {e}")
+        raise RuntimeError(
+            "CE registration failed — CE is not reachable, verify the instance is powered on"
+        )
 
 
 def get_ce_status(ce_ip):
@@ -135,7 +134,8 @@ def get_ce_status(ce_ip):
             "public_ip": data.get("public_ip", ""),
         }
     except Exception as e:
-        raise RuntimeError(f"CE not responding: {_sanitize_error(e)}")
+        print(f"[ERROR] CE health check failed: {e}")
+        raise RuntimeError("CE is not responding")
 
 
 def poll_ce_until_online(ce_ip):
@@ -177,7 +177,7 @@ def poll_ce_until_online(ce_ip):
                 "reason": "silence",
                 "ce_ip": ce_ip,
                 "state": last_state,
-                "error": "CE has not responded for 10 minutes",
+                "error": "CE stopped responding during provisioning",
             }
         if now - start > CE_OVERALL_TIMEOUT:
             return {
@@ -185,7 +185,7 @@ def poll_ce_until_online(ce_ip):
                 "reason": "overall",
                 "ce_ip": ce_ip,
                 "state": last_state,
-                "error": "CE did not come online within 25 minutes",
+                "error": "CE did not finish provisioning within 25 minutes",
             }
 
         time.sleep(CE_POLL_INTERVAL)
@@ -209,6 +209,7 @@ def get_ce_config(ce_ip):
         resp.raise_for_status()
         return resp.json()
     except Exception as e:
-        raise RuntimeError(f"CE config read failed: {_sanitize_error(e)}")
+        print(f"[ERROR] CE config read failed: {e}")
+        raise RuntimeError("Cannot read CE configuration")
 
 
