@@ -11,7 +11,6 @@
         <span class="toggle-track">
           <span class="toggle-thumb"></span>
         </span>
-        <span class="toggle-label">{{ darkMode ? 'Dark' : 'Light' }}</span>
       </button>
     </header>
 
@@ -540,14 +539,6 @@ html, body { margin: 0; padding: 0; background: #f5f6f8; transition: background 
 
 .app.dark .toggle-thumb {
   transform: translateX(16px);
-}
-
-.toggle-label {
-  font-size: 0.6875rem;
-  font-weight: 500;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
 }
 
 @keyframes pulse {
