@@ -358,25 +358,67 @@ def _run_ce_registration(site_token):
     """Register the CE device using the site token.
 
     Imported lazily from ce_client to keep the module optional.
-    Skips registration POST if CE is already ONLINE or PROVISIONED
-    (e.g. after a service restart).
+
+    Detects stale registrations by comparing the token currently on the
+    CE with the new site_token.  If they differ (or the config cannot be
+    read), the CE is factory-reset before re-registering.
     """
     global _ce_status
     try:
-        from ce_client import discover_ce_ip, register_ce, get_ce_status, poll_ce_until_online
+        from ce_client import (
+            discover_ce_ip,
+            register_ce,
+            get_ce_status,
+            get_ce_config,
+            factory_reset_ce,
+            poll_ce_until_online,
+            poll_ce_until_state,
+            CE_RESET_SETTLE_TIME,
+        )
 
         _ce_status = {"status": "DISCOVERING"}
 
         ce_ip = discover_ce_ip()
 
-        # Check if CE is already provisioned (restart recovery)
+        # Check if CE is already provisioned (restart recovery / stale detection)
         try:
             current = get_ce_status(ce_ip)
             current_state = (current.get("state") or "").upper()
+
             if current_state in ("ONLINE", "PROVISIONED"):
-                _ce_status = {"status": "REGISTERED", "ce_ip": ce_ip, **current}
-                print(f"[INFO] CE already {current_state} — skipping registration")
-                return
+                # CE thinks it's registered — verify the token matches
+                stale = False
+                try:
+                    config = get_ce_config(ce_ip)
+                    ce_token = (config.get("Token") or "").strip()
+                    new_token = (site_token or "").strip()
+                    if ce_token == new_token:
+                        _ce_status = {"status": "REGISTERED", "ce_ip": ce_ip, **current}
+                        print(f"[INFO] CE already {current_state} with correct token — skipping registration")
+                        return
+                    else:
+                        print(f"[WARN] CE token mismatch — stale registration detected")
+                        stale = True
+                except RuntimeError as e:
+                    print(f"[WARN] Cannot read CE config ({e}) — assuming stale")
+                    stale = True
+
+                if stale:
+                    _ce_status = {
+                        "status": "RESETTING",
+                        "ce_ip": ce_ip,
+                        "reason": "Stale registration detected — factory resetting CE",
+                    }
+                    factory_reset_ce(ce_ip)
+                    time.sleep(CE_RESET_SETTLE_TIME)
+                    poll_result = poll_ce_until_state(ce_ip, ["WAITING_FOR_CONFIG"])
+                    if not poll_result.get("reached"):
+                        raise RuntimeError(
+                            f"CE did not return to WAITING_FOR_CONFIG after reset: "
+                            f"{poll_result.get('error', 'unknown')}"
+                        )
+                    # Fall through to normal registration below
+
         except RuntimeError:
             pass  # CE not responding yet, proceed with registration
 
