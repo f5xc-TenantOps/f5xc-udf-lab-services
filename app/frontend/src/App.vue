@@ -16,7 +16,7 @@
           <h2 class="card-title">XC Deployment Status</h2>
           <span v-if="deployStatus" :class="['badge', statusBadgeClass]">
             <span class="badge-dot"></span>
-            {{ formatStatus(deployStatus.status) }}
+            {{ formatStatus(overallStatus) }}
           </span>
         </div>
 
@@ -155,9 +155,15 @@ let ceInterval = null
 
 // -- Computed --
 
-const statusBadgeClass = computed(() => {
-  if (!deployStatus.value) return 'badge-gray'
+const overallStatus = computed(() => {
+  if (!deployStatus.value) return ''
   const s = (deployStatus.value.status || '').toUpperCase()
+  if (s === 'COMPLETED' && ceIsActive.value) return 'IN_PROGRESS'
+  return s
+})
+
+const statusBadgeClass = computed(() => {
+  const s = overallStatus.value
   if (s === 'COMPLETED') return 'badge-green'
   if (s === 'IN_PROGRESS') return 'badge-amber'
   if (s === 'FAILED') return 'badge-red'
