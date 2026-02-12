@@ -243,11 +243,21 @@ def fetch_site_token(dep_id, s3_client, state_bucket):
         return None
 
 
+def _has_successful_site(state):
+    """Check if any securemesh_site_v2 resource has reached SUCCESS."""
+    resources = state.get("resources", {})
+    return any(
+        r.get("type") == "securemesh_site_v2" and r.get("status") == "SUCCESS"
+        for r in resources.values()
+    )
+
+
 def state_polling_loop(dep_id, s3_client, state_bucket):
     """Background thread: poll S3 for backend state every STATE_POLL_INTERVAL seconds.
 
     Updates the module-level _backend_state variable and triggers CE
-    registration when site_token first appears in outputs.
+    registration when a securemesh_site_v2 resource reaches SUCCESS
+    and the site token is available in S3.
     """
     global _backend_state, _ce_registration_started
 
@@ -257,16 +267,17 @@ def state_polling_loop(dep_id, s3_client, state_bucket):
             _backend_state = state
             print(f"[INFO] Backend state updated: {state.get('status', 'unknown')}")
 
-            # Trigger CE registration when site_token appears
-            outputs = state.get("outputs", {})
-            if "site_token" in outputs and not _ce_registration_started:
-                _ce_registration_started = True
-                ce_thread = threading.Thread(
-                    target=_run_ce_registration,
-                    args=(outputs["site_token"],),
-                    daemon=True,
-                )
-                ce_thread.start()
+            # Trigger CE registration when site resource succeeds
+            if _has_successful_site(state) and not _ce_registration_started:
+                token = fetch_site_token(dep_id, s3_client, state_bucket)
+                if token:
+                    _ce_registration_started = True
+                    ce_thread = threading.Thread(
+                        target=_run_ce_registration,
+                        args=(token,),
+                        daemon=True,
+                    )
+                    ce_thread.start()
 
         time.sleep(STATE_POLL_INTERVAL)
 

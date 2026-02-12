@@ -507,3 +507,157 @@ class TestContractWithBackend:
         data = json.loads(response.data)
         assert data["status"] == "COMPLETED"
         assert all(s["status"] == "SUCCESS" for s in data["steps"].values())
+
+
+# ---------------------------------------------------------------------------
+# CE registration trigger in state_polling_loop
+# ---------------------------------------------------------------------------
+class TestStatePollingCETrigger:
+    """Tests for CE registration trigger in state_polling_loop."""
+
+    @patch("app._run_ce_registration")
+    @patch("app.fetch_site_token")
+    @patch("app.poll_backend_state")
+    def test_triggers_ce_when_site_resource_succeeds(
+        self, mock_poll, mock_fetch_token, mock_run_ce
+    ):
+        """CE registration starts when securemesh_site_v2 resource reaches SUCCESS."""
+        mock_poll.side_effect = [
+            {
+                "status": "IN_PROGRESS",
+                "resources": {
+                    "fuzzy-cat-site": {
+                        "status": "SUCCESS",
+                        "type": "securemesh_site_v2",
+                    }
+                },
+            },
+            None,
+        ]
+        mock_fetch_token.return_value = "eyJhbGci.jwt.content"
+
+        with patch("app.time.sleep", side_effect=[None, StopIteration]):
+            with pytest.raises(StopIteration):
+                app_module.state_polling_loop(
+                    "dep-123", MagicMock(), "test-bucket"
+                )
+
+        mock_fetch_token.assert_called_once()
+        mock_run_ce.assert_called_once()
+
+    @patch("app._run_ce_registration")
+    @patch("app.fetch_site_token")
+    @patch("app.poll_backend_state")
+    def test_does_not_trigger_ce_when_no_site_resource(
+        self, mock_poll, mock_fetch_token, mock_run_ce
+    ):
+        """CE registration does not start when no securemesh_site_v2 resource."""
+        mock_poll.side_effect = [
+            {
+                "status": "IN_PROGRESS",
+                "resources": {
+                    "fuzzy-cat-origin": {
+                        "status": "SUCCESS",
+                        "type": "origin_pool",
+                    }
+                },
+            },
+            None,
+        ]
+
+        with patch("app.time.sleep", side_effect=[None, StopIteration]):
+            with pytest.raises(StopIteration):
+                app_module.state_polling_loop(
+                    "dep-123", MagicMock(), "test-bucket"
+                )
+
+        mock_fetch_token.assert_not_called()
+        mock_run_ce.assert_not_called()
+
+    @patch("app._run_ce_registration")
+    @patch("app.fetch_site_token")
+    @patch("app.poll_backend_state")
+    def test_does_not_trigger_ce_when_site_not_yet_success(
+        self, mock_poll, mock_fetch_token, mock_run_ce
+    ):
+        """CE registration does not start when site is still IN_PROGRESS."""
+        mock_poll.side_effect = [
+            {
+                "status": "IN_PROGRESS",
+                "resources": {
+                    "fuzzy-cat-site": {
+                        "status": "IN_PROGRESS",
+                        "type": "securemesh_site_v2",
+                    }
+                },
+            },
+            None,
+        ]
+
+        with patch("app.time.sleep", side_effect=[None, StopIteration]):
+            with pytest.raises(StopIteration):
+                app_module.state_polling_loop(
+                    "dep-123", MagicMock(), "test-bucket"
+                )
+
+        mock_fetch_token.assert_not_called()
+        mock_run_ce.assert_not_called()
+
+    @patch("app._run_ce_registration")
+    @patch("app.fetch_site_token")
+    @patch("app.poll_backend_state")
+    def test_does_not_trigger_ce_twice(
+        self, mock_poll, mock_fetch_token, mock_run_ce
+    ):
+        """CE registration only triggers once even if polled multiple times."""
+        state = {
+            "status": "COMPLETED",
+            "resources": {
+                "fuzzy-cat-site": {
+                    "status": "SUCCESS",
+                    "type": "securemesh_site_v2",
+                }
+            },
+        }
+        mock_poll.side_effect = [state, state, None]
+        mock_fetch_token.return_value = "jwt-token"
+
+        with patch("app.time.sleep", side_effect=[None, None, StopIteration]):
+            with pytest.raises(StopIteration):
+                app_module.state_polling_loop(
+                    "dep-123", MagicMock(), "test-bucket"
+                )
+
+        assert mock_fetch_token.call_count == 1
+        mock_run_ce.assert_called_once()
+
+    @patch("app._run_ce_registration")
+    @patch("app.fetch_site_token")
+    @patch("app.poll_backend_state")
+    def test_does_not_trigger_ce_when_token_not_in_s3(
+        self, mock_poll, mock_fetch_token, mock_run_ce
+    ):
+        """CE registration does not start if token fetch returns None."""
+        mock_poll.side_effect = [
+            {
+                "status": "IN_PROGRESS",
+                "resources": {
+                    "fuzzy-cat-site": {
+                        "status": "SUCCESS",
+                        "type": "securemesh_site_v2",
+                    }
+                },
+            },
+            None,
+        ]
+        mock_fetch_token.return_value = None
+
+        with patch("app.time.sleep", side_effect=[None, StopIteration]):
+            with pytest.raises(StopIteration):
+                app_module.state_polling_loop(
+                    "dep-123", MagicMock(), "test-bucket"
+                )
+
+        mock_fetch_token.assert_called_once()
+        mock_run_ce.assert_not_called()
+        assert app_module._ce_registration_started is False
