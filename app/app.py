@@ -223,6 +223,26 @@ def poll_backend_state(dep_id, s3_client, state_bucket):
         return None
 
 
+def fetch_site_token(dep_id, s3_client, state_bucket):
+    """Fetch the CE registration token from S3.
+
+    The token is written by the securemesh_site_v2_create Lambda
+    as a separate object at {dep_id}/site_token.
+
+    Returns the JWT string, or None if not found.
+    """
+    try:
+        response = s3_client.get_object(
+            Bucket=state_bucket, Key=f"{dep_id}/site_token"
+        )
+        return response["Body"].read().decode("utf-8")
+    except s3_client.exceptions.NoSuchKey:
+        return None
+    except Exception as e:
+        print(f"[WARN] Failed to fetch site token: {e}")
+        return None
+
+
 def state_polling_loop(dep_id, s3_client, state_bucket):
     """Background thread: poll S3 for backend state every STATE_POLL_INTERVAL seconds.
 

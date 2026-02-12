@@ -14,6 +14,7 @@ import app as app_module
 from app import (
     app,
     fetch_global_config,
+    fetch_site_token,
     load_deployment_state,
     poll_backend_state,
     save_deployment_state,
@@ -296,6 +297,48 @@ class TestPollBackendState:
         mock_s3.get_object.side_effect = Exception("Connection error")
 
         result = poll_backend_state("dep-123", mock_s3, "test-bucket")
+
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
+# fetch_site_token
+# ---------------------------------------------------------------------------
+class TestFetchSiteToken:
+    """Tests for fetching site token from S3."""
+
+    def test_fetch_site_token_returns_jwt(self):
+        """Returns JWT string when S3 object exists."""
+        mock_s3 = MagicMock()
+        mock_body = MagicMock()
+        mock_body.read.return_value = b"eyJhbGci.jwt.content"
+        mock_s3.get_object.return_value = {"Body": mock_body}
+
+        result = fetch_site_token("dep-123", mock_s3, "test-bucket")
+
+        assert result == "eyJhbGci.jwt.content"
+        mock_s3.get_object.assert_called_once_with(
+            Bucket="test-bucket", Key="dep-123/site_token"
+        )
+
+    def test_fetch_site_token_returns_none_on_nosuchkey(self):
+        """Returns None when token not yet written."""
+        mock_s3 = MagicMock()
+        NoSuchKeyError = type("NoSuchKey", (Exception,), {})
+        mock_s3.exceptions.NoSuchKey = NoSuchKeyError
+        mock_s3.get_object.side_effect = NoSuchKeyError("Not found")
+
+        result = fetch_site_token("dep-123", mock_s3, "test-bucket")
+
+        assert result is None
+
+    def test_fetch_site_token_returns_none_on_error(self):
+        """Returns None on generic S3 error."""
+        mock_s3 = MagicMock()
+        mock_s3.exceptions.NoSuchKey = type("NoSuchKey", (Exception,), {})
+        mock_s3.get_object.side_effect = Exception("Network error")
+
+        result = fetch_site_token("dep-123", mock_s3, "test-bucket")
 
         assert result is None
 
