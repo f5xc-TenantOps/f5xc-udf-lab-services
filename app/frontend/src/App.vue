@@ -359,8 +359,8 @@ html, body { margin: 0; padding: 0; background: #22242c; }
   --border: #353842;
   --border-subtle: #2e3038;
   --text: #f0f2f7;
-  --text-secondary: #7b808a;
-  --text-muted: #5f6776;
+  --text-secondary: #9ba1ad;
+  --text-muted: #6f7787;
   --accent: #e4002b;
   --blue: #4f73ff;
   --green: #35d068;
@@ -629,8 +629,8 @@ html, body { margin: 0; padding: 0; background: #22242c; }
 .step-badge {
   font-size: 0.75rem;
   font-weight: 600;
-  padding: 0.25rem 0.625rem;
-  border-radius: 4px;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
   white-space: nowrap;
   flex-shrink: 0;
 }

@@ -358,14 +358,28 @@ def _run_ce_registration(site_token):
     """Register the CE device using the site token.
 
     Imported lazily from ce_client to keep the module optional.
+    Skips registration POST if CE is already ONLINE or PROVISIONED
+    (e.g. after a service restart).
     """
     global _ce_status
     try:
-        from ce_client import discover_ce_ip, register_ce, poll_ce_until_online
+        from ce_client import discover_ce_ip, register_ce, get_ce_status, poll_ce_until_online
 
         _ce_status = {"status": "DISCOVERING"}
 
         ce_ip = discover_ce_ip()
+
+        # Check if CE is already provisioned (restart recovery)
+        try:
+            current = get_ce_status(ce_ip)
+            current_state = (current.get("state") or "").upper()
+            if current_state in ("ONLINE", "PROVISIONED"):
+                _ce_status = {"status": "REGISTERED", "ce_ip": ce_ip, **current}
+                print(f"[INFO] CE already {current_state} — skipping registration")
+                return
+        except RuntimeError:
+            pass  # CE not responding yet, proceed with registration
+
         _ce_status = {"status": "REGISTERING", "ce_ip": ce_ip}
 
         register_ce(ce_ip, site_token)
