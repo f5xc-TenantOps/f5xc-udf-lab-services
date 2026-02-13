@@ -121,6 +121,57 @@ class TestGetCeStatus:
 
 
 # ---------------------------------------------------------------------------
+# wait_for_ce
+# ---------------------------------------------------------------------------
+class TestWaitForCe:
+    """Tests for wait_for_ce retry logic."""
+
+    @patch("ce_client.time.sleep")
+    @patch("ce_client.get_ce_status")
+    def test_returns_immediately_when_reachable(self, mock_status, mock_sleep):
+        """Returns status dict on first successful health check."""
+        mock_status.return_value = {
+            "state": "PROVISIONED", "hostname": "ce-1", "os_version": "", "public_ip": "",
+        }
+
+        result = ce_client.wait_for_ce("10.1.1.5")
+
+        assert result["state"] == "PROVISIONED"
+        mock_sleep.assert_not_called()
+
+    @patch("ce_client.time.sleep")
+    @patch("ce_client.time.time")
+    @patch("ce_client.get_ce_status")
+    def test_retries_until_reachable(self, mock_status, mock_time, mock_sleep):
+        """Retries health check until CE responds."""
+        times = iter([0, 10, 20])
+        mock_time.side_effect = lambda: next(times)
+
+        mock_status.side_effect = [
+            RuntimeError("not responding"),
+            {"state": "WAITING_FOR_CONFIG", "hostname": "", "os_version": "", "public_ip": ""},
+        ]
+
+        result = ce_client.wait_for_ce("10.1.1.5")
+
+        assert result["state"] == "WAITING_FOR_CONFIG"
+        assert mock_sleep.call_count == 1
+
+    @patch("ce_client.time.sleep")
+    @patch("ce_client.time.time")
+    @patch("ce_client.get_ce_status")
+    def test_raises_after_timeout(self, mock_status, mock_time, mock_sleep):
+        """Raises RuntimeError after timeout expires."""
+        times = iter([0, 301])
+        mock_time.side_effect = lambda: next(times)
+
+        mock_status.side_effect = RuntimeError("not responding")
+
+        with pytest.raises(RuntimeError, match="did not become reachable"):
+            ce_client.wait_for_ce("10.1.1.5")
+
+
+# ---------------------------------------------------------------------------
 # poll_ce_until_online
 # ---------------------------------------------------------------------------
 class TestPollCeUntilOnline:

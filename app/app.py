@@ -359,17 +359,20 @@ def _run_ce_registration(site_token):
 
     Imported lazily from ce_client to keep the module optional.
 
-    Detects stale registrations by comparing the token currently on the
-    CE with the new site_token.  If they differ (or the config cannot be
-    read), the CE is bound to a dead site and a new UDF deployment is
-    required.
+    Flow:
+      1. Discover CE IP via UDF metadata
+      2. Wait for CE to become reachable (it may still be booting)
+      3. Read CE config and compare tokens — this is determinative:
+         - Token match  → restart recovery, skip registration
+         - Token mismatch → stale/orphaned CE, fail with clear message
+         - No token      → fresh CE, proceed with registration
     """
     global _ce_status
     try:
         from ce_client import (
             discover_ce_ip,
             register_ce,
-            get_ce_status,
+            wait_for_ce,
             get_ce_config,
             poll_ce_until_online,
         )
@@ -378,31 +381,27 @@ def _run_ce_registration(site_token):
 
         ce_ip = discover_ce_ip()
 
-        # Check if CE is already provisioned (restart recovery / stale detection)
+        # Wait for CE to become reachable (retries for up to 5 min)
+        _ce_status = {"status": "DISCOVERING", "ce_ip": ce_ip}
+        current = wait_for_ce(ce_ip)
+        current_state = (current.get("state") or "").upper()
+        print(f"[INFO] CE reachable — state: {current_state}")
+
+        # Token check is determinative
         try:
-            current = get_ce_status(ce_ip)
-            current_state = (current.get("state") or "").upper()
+            config = get_ce_config(ce_ip)
+            ce_token = (config.get("Vpm", {}).get("Token") or "").strip()
+            new_token = (site_token or "").strip()
+            print(f"[DEBUG] CE token present: {bool(ce_token)}, "
+                  f"new token present: {bool(new_token)}, "
+                  f"match: {ce_token == new_token if ce_token else 'n/a'}")
 
-            if current_state in ("ONLINE", "PROVISIONED"):
-                # CE is registered — check if the token matches to
-                # distinguish restart recovery from stale registration.
-                # Only flag stale when we positively read a DIFFERENT token.
-                # Missing/empty token or config read failure → trust CE state.
-                stale = False
-                try:
-                    config = get_ce_config(ce_ip)
-                    ce_token = (config.get("Vpm", {}).get("Token") or "").strip()
-                    new_token = (site_token or "").strip()
-                    print(f"[DEBUG] CE token present: {bool(ce_token)}, "
-                          f"new token present: {bool(new_token)}, "
-                          f"match: {ce_token == new_token if ce_token else 'n/a'}")
-                    if ce_token and new_token and ce_token != new_token:
-                        print(f"[ERROR] CE token mismatch — stale registration detected")
-                        stale = True
-                except RuntimeError as e:
-                    print(f"[WARN] Cannot read CE config ({e}) — treating as valid")
-
-                if stale:
+            if ce_token and new_token:
+                if ce_token == new_token:
+                    _ce_status = {"status": "REGISTERED", "ce_ip": ce_ip, **current}
+                    print(f"[INFO] CE token matches — restart recovery")
+                    return
+                else:
                     _ce_status = {
                         "status": "FAILED",
                         "ce_ip": ce_ip,
@@ -411,16 +410,12 @@ def _run_ce_registration(site_token):
                             "A new UDF deployment is needed to reset the CE."
                         ),
                     }
+                    print(f"[ERROR] CE token mismatch — stale registration")
                     return
+        except RuntimeError as e:
+            print(f"[WARN] Cannot read CE config ({e}) — proceeding with registration")
 
-                # Restart recovery — CE is already registered with this site
-                _ce_status = {"status": "REGISTERED", "ce_ip": ce_ip, **current}
-                print(f"[INFO] CE already {current_state} — skipping registration")
-                return
-
-        except RuntimeError:
-            pass  # CE not responding yet, proceed with registration
-
+        # No token on CE (or config unreadable) → register normally
         _ce_status = {"status": "REGISTERING", "ce_ip": ce_ip}
 
         register_ce(ce_ip, site_token)

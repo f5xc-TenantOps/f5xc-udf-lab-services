@@ -22,6 +22,8 @@ CE_CONFIG_PATH = "/api/ves.io.vpm/introspect/write/ves.io.vpm.config/update"
 CE_HEALTH_PATH = "/api/ves.io.vpm/introspect/read/ves.io.vpm.health"
 CE_CONFIG_READ_PATH = "/api/ves.io.vpm/introspect/read/ves.io.vpm.config"
 
+CE_BOOT_TIMEOUT = 300       # 5 min — wait for CE to become reachable
+CE_BOOT_POLL_INTERVAL = 10  # seconds between reachability checks
 CE_POLL_INTERVAL = 15       # seconds between polls
 CE_SILENCE_TIMEOUT = 600    # 10 min — give up if CE goes completely silent this long
 CE_OVERALL_TIMEOUT = 1500   # 25 min — hard cap, CE isn't coming up
@@ -108,6 +110,29 @@ def get_ce_status(ce_ip):
     except Exception as e:
         print(f"[ERROR] CE health check failed: {e}")
         raise RuntimeError("CE is not responding")
+
+
+def wait_for_ce(ce_ip, timeout=CE_BOOT_TIMEOUT, interval=CE_BOOT_POLL_INTERVAL):
+    """Poll CE health endpoint until it responds.
+
+    The CE may still be booting when registration is triggered.
+    This retries the health check until the CE answers or the
+    timeout expires.
+
+    Returns the status dict from get_ce_status on first success.
+    Raises RuntimeError if CE never responds within timeout.
+    """
+    start = time.time()
+    while True:
+        try:
+            return get_ce_status(ce_ip)
+        except RuntimeError:
+            elapsed = time.time() - start
+            if elapsed >= timeout:
+                raise RuntimeError(
+                    f"CE did not become reachable within {timeout // 60} minutes"
+                )
+            time.sleep(interval)
 
 
 def poll_ce_until_online(ce_ip):
