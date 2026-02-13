@@ -38,11 +38,13 @@ def reset_globals():
     app_module._deployment_state = None
     app_module._ce_status = None
     app_module._ce_registration_started = False
+    app_module._seen_provisioning = False
     yield
     app_module._backend_state = None
     app_module._deployment_state = None
     app_module._ce_status = None
     app_module._ce_registration_started = False
+    app_module._seen_provisioning = False
 
 
 # ---------------------------------------------------------------------------
@@ -579,3 +581,121 @@ class TestStatePollingCETrigger:
         # _run_ce_registration is called in a thread, but the mock captures args
         call_args = mock_run_ce.call_args
         assert call_args[0][0] == "my-specific-jwt"
+
+    @patch("app._run_ce_registration")
+    @patch("app.poll_backend_state")
+    def test_sets_seen_provisioning_on_pending(self, mock_poll, mock_run_ce):
+        """_seen_provisioning is set when state transitions to PENDING."""
+        mock_poll.side_effect = [
+            {"status": "PENDING", "outputs": {}},
+            None,
+        ]
+
+        with patch("app.time.sleep", side_effect=[None, StopIteration]):
+            with pytest.raises(StopIteration):
+                app_module.state_polling_loop(
+                    "dep-123", MagicMock(), "test-bucket"
+                )
+
+        assert app_module._seen_provisioning is True
+
+    @patch("app._run_ce_registration")
+    @patch("app.poll_backend_state")
+    def test_sets_seen_provisioning_on_in_progress(self, mock_poll, mock_run_ce):
+        """_seen_provisioning is set when state transitions to IN_PROGRESS."""
+        mock_poll.side_effect = [
+            {"status": "IN_PROGRESS", "outputs": {}},
+            None,
+        ]
+
+        with patch("app.time.sleep", side_effect=[None, StopIteration]):
+            with pytest.raises(StopIteration):
+                app_module.state_polling_loop(
+                    "dep-123", MagicMock(), "test-bucket"
+                )
+
+        assert app_module._seen_provisioning is True
+
+    @patch("app._run_ce_registration")
+    @patch("app.poll_backend_state")
+    def test_does_not_set_seen_provisioning_on_completed(self, mock_poll, mock_run_ce):
+        """_seen_provisioning stays False when state is only ever COMPLETED."""
+        mock_poll.side_effect = [
+            {"status": "COMPLETED", "outputs": {"site_token": "jwt"}},
+            None,
+        ]
+
+        with patch("app.time.sleep", side_effect=[None, StopIteration]):
+            with pytest.raises(StopIteration):
+                app_module.state_polling_loop(
+                    "dep-123", MagicMock(), "test-bucket"
+                )
+
+        assert app_module._seen_provisioning is False
+
+
+# ---------------------------------------------------------------------------
+# _wait_for_fresh_token / _wait_for_provisioning_complete
+# ---------------------------------------------------------------------------
+class TestWaitForFreshToken:
+    """Tests for token stabilization before CE comparison."""
+
+    def test_returns_immediately_when_provisioning_already_complete(self):
+        """If provisioning detected and state is COMPLETED, returns fresh token."""
+        app_module._seen_provisioning = True
+        app_module._backend_state = {
+            "status": "COMPLETED",
+            "outputs": {"site_token": "new-token"},
+        }
+
+        result = app_module._wait_for_fresh_token("old-token")
+
+        assert result == "new-token"
+
+    def test_waits_for_provisioning_during_grace_period(self):
+        """If provisioning starts during grace period, waits for completion."""
+        app_module._seen_provisioning = False
+        app_module._backend_state = {
+            "status": "COMPLETED",
+            "outputs": {"site_token": "old-token"},
+        }
+
+        call_count = 0
+
+        def mock_sleep(seconds):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 2:
+                # Polling loop detected PENDING → set flag + update state
+                app_module._seen_provisioning = True
+                app_module._backend_state = {
+                    "status": "IN_PROGRESS",
+                    "outputs": {},
+                }
+            if call_count == 4:
+                # Provisioning complete with fresh token
+                app_module._backend_state = {
+                    "status": "COMPLETED",
+                    "outputs": {"site_token": "fresh-token"},
+                }
+
+        with patch("app.time.sleep", side_effect=mock_sleep):
+            result = app_module._wait_for_fresh_token("old-token")
+
+        assert result == "fresh-token"
+
+    def test_returns_current_token_when_no_provisioning(self):
+        """If no provisioning after grace period, returns current token (restart)."""
+        app_module._seen_provisioning = False
+        app_module._backend_state = {
+            "status": "COMPLETED",
+            "outputs": {"site_token": "same-token"},
+        }
+
+        with patch("app.time.sleep"):
+            with patch("app.time.time") as mock_time:
+                # Simulate time passing beyond grace period
+                mock_time.side_effect = [0, 0, 31, 31]
+                result = app_module._wait_for_fresh_token("same-token")
+
+        assert result == "same-token"

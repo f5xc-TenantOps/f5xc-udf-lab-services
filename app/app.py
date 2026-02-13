@@ -40,6 +40,11 @@ _deployment_state: Optional[dict] = None
 # Flag to ensure CE registration fires only once per deployment
 _ce_registration_started = False
 
+# Set True when polling loop sees PENDING/IN_PROGRESS — signals that
+# a new provisioning cycle is running and the S3 state (including
+# outputs.site_token) will be replaced with fresh values.
+_seen_provisioning = False
+
 # ---------------------------------------------------------------------------
 # Flask app
 # ---------------------------------------------------------------------------
@@ -228,14 +233,23 @@ def state_polling_loop(dep_id, s3_client, state_bucket):
 
     Updates the module-level _backend_state variable and triggers CE
     registration when the site token appears in outputs.
+
+    Also tracks whether a new provisioning cycle has started
+    (_seen_provisioning) so that CE registration can wait for the
+    fresh token instead of comparing against a stale one.
     """
-    global _backend_state, _ce_registration_started
+    global _backend_state, _ce_registration_started, _seen_provisioning
 
     while True:
         state = poll_backend_state(dep_id, s3_client, state_bucket)
         if state:
             _backend_state = state
-            print(f"[INFO] Backend state updated: {state.get('status', 'unknown')}")
+            status = (state.get("status") or "").upper()
+            print(f"[INFO] Backend state updated: {status or 'unknown'}")
+
+            # Track whether a new provisioning cycle is running
+            if status in ("PENDING", "IN_PROGRESS"):
+                _seen_provisioning = True
 
             # Trigger CE registration when site token is available in outputs
             token = state.get("outputs", {}).get("site_token")
@@ -323,14 +337,65 @@ def sqs_heartbeat_loop(sqs_url, aws_key, aws_secret, dep_id, lab_id, email, pet)
 # ---------------------------------------------------------------------------
 # CE registration (reactive -- triggered by state_polling_loop)
 # ---------------------------------------------------------------------------
-def _get_latest_site_token():
-    """Read the current site_token from backend state.
+PROVISIONING_GRACE_PERIOD = 30   # seconds to wait for provisioning to start
+PROVISIONING_WAIT_TIMEOUT = 300  # seconds to wait for provisioning to complete
 
-    The polling loop continuously updates _backend_state from S3.
-    This ensures we compare against the freshest token, not a stale
-    one captured when the CE registration thread was spawned.
-    """
+
+def _get_latest_site_token():
+    """Read the current site_token from backend state."""
     return (_backend_state or {}).get("outputs", {}).get("site_token", "")
+
+
+def _wait_for_fresh_token(original_token):
+    """Wait for the site token to stabilize after any new provisioning.
+
+    The site_token that triggered this thread may be stale (from an S3
+    state file that persisted across deployment cycles).  This function
+    ensures we don't compare against a stale token:
+
+    1. If a provisioning cycle has already been detected
+       (_seen_provisioning), wait for it to complete and return the
+       fresh token.
+    2. If not yet detected, wait a grace period — the step function
+       may not have started yet.  If provisioning starts during the
+       grace period, wait for completion.
+    3. If no provisioning is detected after the grace period, this is
+       a genuine restart — the current token is valid.
+    """
+    # If provisioning already detected, skip the grace period
+    if _seen_provisioning:
+        print("[INFO] Provisioning cycle detected — waiting for completion")
+        return _wait_for_provisioning_complete(original_token)
+
+    # Grace period: wait to see if provisioning starts
+    print(f"[INFO] Waiting up to {PROVISIONING_GRACE_PERIOD}s "
+          f"for provisioning cycle to start")
+    grace_start = time.time()
+    while time.time() - grace_start < PROVISIONING_GRACE_PERIOD:
+        if _seen_provisioning:
+            print("[INFO] Provisioning cycle detected — waiting for completion")
+            return _wait_for_provisioning_complete(original_token)
+        time.sleep(5)
+
+    # No provisioning detected — genuine restart
+    print("[INFO] No provisioning cycle detected — using current token")
+    return _get_latest_site_token() or original_token
+
+
+def _wait_for_provisioning_complete(original_token):
+    """Wait until backend state reaches COMPLETED with a token."""
+    start = time.time()
+    while time.time() - start < PROVISIONING_WAIT_TIMEOUT:
+        status = (_backend_state or {}).get("status", "").upper()
+        token = _get_latest_site_token()
+        if status == "COMPLETED" and token:
+            if token != original_token:
+                print("[INFO] Fresh token available from new provisioning")
+            return token
+        time.sleep(5)
+
+    print("[WARN] Timed out waiting for provisioning to complete")
+    return _get_latest_site_token() or original_token
 
 
 def _run_ce_registration(site_token):
@@ -341,16 +406,12 @@ def _run_ce_registration(site_token):
     Flow:
       1. Discover CE IP via UDF metadata
       2. Wait for CE to become reachable (it may still be booting)
-      3. Read CE config and compare tokens — this is determinative:
+      3. Wait for any in-flight provisioning to complete so we have
+         a fresh token (not stale from a previous deployment cycle)
+      4. Read CE config and compare tokens — this is determinative:
          - Token match  → restart recovery, skip registration
          - Token mismatch → stale/orphaned CE, fail with clear message
          - No token      → fresh CE, proceed with registration
-
-    Important: The site_token arg may be stale (from an old S3 state file
-    that persisted across deployment cycles). We always re-read the latest
-    token from _backend_state at comparison time, since the polling loop
-    will have picked up the fresh token from a new provisioning cycle by
-    the time the CE becomes reachable.
     """
     global _ce_status
     try:
@@ -372,13 +433,10 @@ def _run_ce_registration(site_token):
         current_state = (current.get("state") or "").upper()
         print(f"[INFO] CE reachable — state: {current_state}")
 
-        # Re-read the latest token from backend state. Between thread
-        # start and now, a new provisioning cycle may have completed
-        # with a fresh token replacing the stale one.
-        latest_token = _get_latest_site_token()
-        effective_token = latest_token or site_token
-        if latest_token and latest_token != site_token:
-            print(f"[INFO] Site token updated since thread start — using fresh token")
+        # Wait for any in-flight provisioning to complete so we
+        # compare against a fresh token, not a stale one from an
+        # S3 state file that persisted across deployment cycles.
+        effective_token = _wait_for_fresh_token(site_token)
 
         # Token check is determinative
         try:
