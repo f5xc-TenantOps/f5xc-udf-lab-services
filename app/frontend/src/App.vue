@@ -115,17 +115,6 @@
         </div>
       </section>
 
-      <!-- Outputs Card -->
-      <section v-if="hasOutputs" class="card">
-        <h2 class="card-title">Outputs</h2>
-        <div class="outputs-list">
-          <div v-for="(value, key) in visibleOutputs" :key="key" class="output-row">
-            <span class="output-key">{{ formatStatus(key) }}</span>
-            <span class="output-value">{{ value }}</span>
-          </div>
-        </div>
-      </section>
-
       <!-- Error Section -->
       <section v-if="hasErrors" class="card card-error">
         <button class="error-toggle" @click="showErrorLog = !showErrorLog">
@@ -232,20 +221,6 @@ const provisioningItems = computed(() => {
   }
 
   return items
-})
-
-const INTERNAL_OUTPUT_KEYS = ['site_token']
-
-const visibleOutputs = computed(() => {
-  if (!deployStatus.value?.outputs) return {}
-  return Object.fromEntries(
-    Object.entries(deployStatus.value.outputs)
-      .filter(([key]) => !INTERNAL_OUTPUT_KEYS.includes(key))
-  )
-})
-
-const hasOutputs = computed(() => {
-  return Object.keys(visibleOutputs.value).length > 0
 })
 
 const showCeRow = computed(() => {
@@ -813,41 +788,6 @@ html, body { margin: 0; padding: 0; background: #f5f6f8; transition: background 
   font-size: 0.75rem;
   color: var(--text-muted);
   text-align: right;
-}
-
-/* -- Outputs -- */
-.outputs-list {
-  display: flex;
-  flex-direction: column;
-}
-
-.output-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  padding: 0.625rem 0;
-  border-bottom: 1px solid var(--border-subtle);
-  gap: 1rem;
-}
-
-.output-row:last-child {
-  border-bottom: none;
-}
-
-.output-key {
-  font-size: 0.8125rem;
-  color: var(--text-secondary);
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.output-value {
-  font-family: var(--mono);
-  font-size: 0.75rem;
-  color: var(--text);
-  word-break: break-all;
-  text-align: right;
-  letter-spacing: -0.01em;
 }
 
 /* -- Error section -- */

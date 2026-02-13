@@ -14,7 +14,6 @@ import app as app_module
 from app import (
     app,
     fetch_global_config,
-    fetch_site_token,
     load_deployment_state,
     poll_backend_state,
     save_deployment_state,
@@ -299,48 +298,6 @@ class TestPollBackendState:
 
 
 # ---------------------------------------------------------------------------
-# fetch_site_token
-# ---------------------------------------------------------------------------
-class TestFetchSiteToken:
-    """Tests for fetching site token from S3."""
-
-    def test_fetch_site_token_returns_jwt(self):
-        """Returns JWT string when S3 object exists."""
-        mock_s3 = MagicMock()
-        mock_body = MagicMock()
-        mock_body.read.return_value = b"eyJhbGci.jwt.content"
-        mock_s3.get_object.return_value = {"Body": mock_body}
-
-        result = fetch_site_token("dep-123", mock_s3, "test-bucket")
-
-        assert result == "eyJhbGci.jwt.content"
-        mock_s3.get_object.assert_called_once_with(
-            Bucket="test-bucket", Key="dep-123/site_token"
-        )
-
-    def test_fetch_site_token_returns_none_on_nosuchkey(self):
-        """Returns None when token not yet written."""
-        mock_s3 = MagicMock()
-        NoSuchKeyError = type("NoSuchKey", (Exception,), {})
-        mock_s3.exceptions.NoSuchKey = NoSuchKeyError
-        mock_s3.get_object.side_effect = NoSuchKeyError("Not found")
-
-        result = fetch_site_token("dep-123", mock_s3, "test-bucket")
-
-        assert result is None
-
-    def test_fetch_site_token_returns_none_on_error(self):
-        """Returns None on generic S3 error."""
-        mock_s3 = MagicMock()
-        mock_s3.exceptions.NoSuchKey = type("NoSuchKey", (Exception,), {})
-        mock_s3.get_object.side_effect = Exception("Network error")
-
-        result = fetch_site_token("dep-123", mock_s3, "test-bucket")
-
-        assert result is None
-
-
-# ---------------------------------------------------------------------------
 # save_deployment_state / load_deployment_state
 # ---------------------------------------------------------------------------
 class TestDeploymentStatePersistence:
@@ -517,28 +474,23 @@ class TestContractWithBackend:
 # CE registration trigger in state_polling_loop
 # ---------------------------------------------------------------------------
 class TestStatePollingCETrigger:
-    """Tests for CE registration trigger in state_polling_loop."""
+    """Tests for CE registration trigger in state_polling_loop.
+
+    CE registration triggers when outputs.site_token appears in the
+    polled S3 state. The token is passed directly to _run_ce_registration.
+    """
 
     @patch("app._run_ce_registration")
-    @patch("app.fetch_site_token")
     @patch("app.poll_backend_state")
-    def test_triggers_ce_when_site_resource_succeeds(
-        self, mock_poll, mock_fetch_token, mock_run_ce
-    ):
-        """CE registration starts when securemesh_site_v2 resource reaches SUCCESS."""
+    def test_triggers_ce_when_site_token_in_outputs(self, mock_poll, mock_run_ce):
+        """CE registration starts when site_token appears in outputs."""
         mock_poll.side_effect = [
             {
                 "status": "IN_PROGRESS",
-                "resources": {
-                    "fuzzy-cat-site": {
-                        "status": "SUCCESS",
-                        "type": "securemesh_site_v2",
-                    }
-                },
+                "outputs": {"site_token": "eyJhbGci.jwt.content"},
             },
             None,
         ]
-        mock_fetch_token.return_value = "eyJhbGci.jwt.content"
 
         with patch("app.time.sleep", side_effect=[None, StopIteration]):
             with pytest.raises(StopIteration):
@@ -546,25 +498,16 @@ class TestStatePollingCETrigger:
                     "dep-123", MagicMock(), "test-bucket"
                 )
 
-        mock_fetch_token.assert_called_once()
         mock_run_ce.assert_called_once()
 
     @patch("app._run_ce_registration")
-    @patch("app.fetch_site_token")
     @patch("app.poll_backend_state")
-    def test_does_not_trigger_ce_when_no_site_resource(
-        self, mock_poll, mock_fetch_token, mock_run_ce
-    ):
-        """CE registration does not start when no securemesh_site_v2 resource."""
+    def test_does_not_trigger_ce_when_no_outputs(self, mock_poll, mock_run_ce):
+        """CE registration does not start when outputs is empty."""
         mock_poll.side_effect = [
             {
                 "status": "IN_PROGRESS",
-                "resources": {
-                    "fuzzy-cat-origin": {
-                        "status": "SUCCESS",
-                        "type": "origin_pool",
-                    }
-                },
+                "outputs": {},
             },
             None,
         ]
@@ -575,25 +518,16 @@ class TestStatePollingCETrigger:
                     "dep-123", MagicMock(), "test-bucket"
                 )
 
-        mock_fetch_token.assert_not_called()
         mock_run_ce.assert_not_called()
 
     @patch("app._run_ce_registration")
-    @patch("app.fetch_site_token")
     @patch("app.poll_backend_state")
-    def test_does_not_trigger_ce_when_site_not_yet_success(
-        self, mock_poll, mock_fetch_token, mock_run_ce
-    ):
-        """CE registration does not start when site is still IN_PROGRESS."""
+    def test_does_not_trigger_ce_when_no_site_token_key(self, mock_poll, mock_run_ce):
+        """CE registration does not start when outputs has no site_token."""
         mock_poll.side_effect = [
             {
                 "status": "IN_PROGRESS",
-                "resources": {
-                    "fuzzy-cat-site": {
-                        "status": "IN_PROGRESS",
-                        "type": "securemesh_site_v2",
-                    }
-                },
+                "outputs": {"lb_hostname": "app.example.com"},
             },
             None,
         ]
@@ -604,27 +538,17 @@ class TestStatePollingCETrigger:
                     "dep-123", MagicMock(), "test-bucket"
                 )
 
-        mock_fetch_token.assert_not_called()
         mock_run_ce.assert_not_called()
 
     @patch("app._run_ce_registration")
-    @patch("app.fetch_site_token")
     @patch("app.poll_backend_state")
-    def test_does_not_trigger_ce_twice(
-        self, mock_poll, mock_fetch_token, mock_run_ce
-    ):
+    def test_does_not_trigger_ce_twice(self, mock_poll, mock_run_ce):
         """CE registration only triggers once even if polled multiple times."""
         state = {
             "status": "COMPLETED",
-            "resources": {
-                "fuzzy-cat-site": {
-                    "status": "SUCCESS",
-                    "type": "securemesh_site_v2",
-                }
-            },
+            "outputs": {"site_token": "jwt-token"},
         }
         mock_poll.side_effect = [state, state, None]
-        mock_fetch_token.return_value = "jwt-token"
 
         with patch("app.time.sleep", side_effect=[None, None, StopIteration]):
             with pytest.raises(StopIteration):
@@ -632,29 +556,19 @@ class TestStatePollingCETrigger:
                     "dep-123", MagicMock(), "test-bucket"
                 )
 
-        assert mock_fetch_token.call_count == 1
         mock_run_ce.assert_called_once()
 
     @patch("app._run_ce_registration")
-    @patch("app.fetch_site_token")
     @patch("app.poll_backend_state")
-    def test_does_not_trigger_ce_when_token_not_in_s3(
-        self, mock_poll, mock_fetch_token, mock_run_ce
-    ):
-        """CE registration does not start if token fetch returns None."""
+    def test_passes_token_to_ce_registration(self, mock_poll, mock_run_ce):
+        """The site_token value is passed to _run_ce_registration."""
         mock_poll.side_effect = [
             {
                 "status": "IN_PROGRESS",
-                "resources": {
-                    "fuzzy-cat-site": {
-                        "status": "SUCCESS",
-                        "type": "securemesh_site_v2",
-                    }
-                },
+                "outputs": {"site_token": "my-specific-jwt"},
             },
             None,
         ]
-        mock_fetch_token.return_value = None
 
         with patch("app.time.sleep", side_effect=[None, StopIteration]):
             with pytest.raises(StopIteration):
@@ -662,6 +576,6 @@ class TestStatePollingCETrigger:
                     "dep-123", MagicMock(), "test-bucket"
                 )
 
-        mock_fetch_token.assert_called_once()
-        mock_run_ce.assert_not_called()
-        assert app_module._ce_registration_started is False
+        # _run_ce_registration is called in a thread, but the mock captures args
+        call_args = mock_run_ce.call_args
+        assert call_args[0][0] == "my-specific-jwt"

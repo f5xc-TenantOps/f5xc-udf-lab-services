@@ -223,15 +223,6 @@ def poll_backend_state(dep_id, s3_client, state_bucket):
         return None
 
 
-def _has_successful_site(state):
-    """Check if any securemesh_site_v2 resource has reached SUCCESS."""
-    resources = state.get("resources", {})
-    return any(
-        r.get("type") == "securemesh_site_v2" and r.get("status") == "SUCCESS"
-        for r in resources.values()
-    )
-
-
 def state_polling_loop(dep_id, s3_client, state_bucket):
     """Background thread: poll S3 for backend state every STATE_POLL_INTERVAL seconds.
 
