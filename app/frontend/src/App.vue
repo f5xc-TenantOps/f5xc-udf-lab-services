@@ -744,6 +744,7 @@ html, body { margin: 0; padding: 0; background: #f5f6f8; transition: background 
   color: var(--red);
   font-size: 0.8125rem;
   font-weight: 600;
+  margin-right: 5rem;
 }
 
 .step-badge {
