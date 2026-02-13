@@ -34,7 +34,7 @@
           <div class="deploy-meta">
             <div class="meta-row">
               <span class="meta-label">Petname</span>
-              <span class="meta-value">{{ deployStatus.petname || metadata?.petname || '...' }}</span>
+              <span class="meta-value mono">{{ deployStatus.petname || metadata?.petname || '...' }}</span>
             </div>
             <div class="meta-row">
               <span class="meta-label">Deployment ID</span>
@@ -92,7 +92,7 @@
                 </div>
                 <div class="step-content">
                   <span class="step-name">CE Registration</span>
-                  <span v-if="ceStatus?.ce_ip" class="step-detail">{{ ceStatus.ce_ip }}</span>
+                  <span v-if="ceStatus?.ce_ip" class="step-type">{{ ceStatus.ce_ip }}</span>
                   <span v-if="ceSubtext" class="step-type">{{ ceSubtext }}</span>
                   <span v-if="ceStatus?.error && ceRowStatus === 'FAILED'" class="step-error">{{ ceStatus.error }}</span>
                 </div>
@@ -580,7 +580,7 @@ html, body { margin: 0; padding: 0; background: #f5f6f8; transition: background 
 
 .card-title {
   font-size: 0.8125rem;
-  font-weight: 700;
+  font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-secondary);
@@ -618,7 +618,6 @@ html, body { margin: 0; padding: 0; background: #f5f6f8; transition: background 
 .deploy-meta {
   display: flex;
   flex-direction: column;
-  gap: 0;
 }
 
 .meta-row {
@@ -630,7 +629,7 @@ html, body { margin: 0; padding: 0; background: #f5f6f8; transition: background 
 }
 
 .meta-row:last-child {
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: none;
 }
 
 .meta-label {
@@ -668,7 +667,6 @@ html, body { margin: 0; padding: 0; background: #f5f6f8; transition: background 
 /* -- Steps section -- */
 .steps-section {
   margin-top: 1.5rem;
-  padding-top: 0;
 }
 
 .section-label {
@@ -734,11 +732,6 @@ html, body { margin: 0; padding: 0; background: #f5f6f8; transition: background 
   font-size: 0.9375rem;
   font-weight: 600;
   color: var(--text);
-}
-
-.step-detail {
-  font-size: 0.8125rem;
-  color: var(--text-secondary);
 }
 
 .step-type {
@@ -809,6 +802,7 @@ html, body { margin: 0; padding: 0; background: #f5f6f8; transition: background 
   border-top: 1px solid var(--border-subtle);
   font-size: 0.75rem;
   color: var(--text-muted);
+  text-align: right;
 }
 
 /* -- Outputs -- */
@@ -896,17 +890,6 @@ html, body { margin: 0; padding: 0; background: #f5f6f8; transition: background 
 
 .error-msg {
   color: var(--red);
-}
-
-.error-banner {
-  margin-top: 0.75rem;
-  padding: 0.75rem;
-  background: var(--red-dim);
-  border: 1px solid rgba(217, 58, 32, 0.2);
-  color: var(--red);
-  border-radius: 8px;
-  font-size: 0.8125rem;
-  font-family: var(--mono);
 }
 
 /* -- Scrollbar -- */

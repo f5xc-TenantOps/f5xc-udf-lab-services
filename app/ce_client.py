@@ -6,7 +6,6 @@ and polls until it comes online.
 """
 
 import os
-import re
 import time
 import urllib3
 
@@ -27,33 +26,6 @@ CE_POLL_INTERVAL = 15       # seconds between polls
 CE_SILENCE_TIMEOUT = 600    # 10 min — give up if CE goes completely silent this long
 CE_OVERALL_TIMEOUT = 1500   # 25 min — hard cap, CE isn't coming up
 
-
-def _sanitize_error(exc):
-    """Strip noisy connection-pool details from exception messages.
-
-    Raw urllib3/requests exceptions include the full
-    HTTPSConnectionPool(...) prefix and nested <urllib3...object>
-    references which are confusing for users.
-    """
-    msg = str(exc)
-    # Strip HTTPS?Connection(Pool)?(host=..., port=...): prefix
-    msg = re.sub(r"HTTPS?Connection(?:Pool)?\([^)]*\):\s*", "", msg)
-    # Strip "Max retries exceeded with url: /path " noise
-    msg = re.sub(r"Max retries exceeded with url: \S+\s*", "", msg)
-    # Strip "(Caused by " wrapper
-    msg = re.sub(r"\(?Caused by\s*", "", msg)
-    # Strip exception class wrappers like NewConnectionError('...')
-    msg = re.sub(r"\w+Error\(['\"]?", "", msg)
-    # Strip <urllib3.connection.HTTPSConnection object at 0x...> references
-    msg = re.sub(r"<[^>]+>", "", msg)
-    # Clean up stray punctuation left from stripping
-    msg = msg.strip("'\"() \n")
-    # Collapse leading ": " or ", " left after object removal
-    msg = re.sub(r"^[,:]\s*", "", msg)
-    # Truncate very long messages
-    if len(msg) > 200:
-        msg = msg[:200] + "..."
-    return msg
 
 
 def discover_ce_ip():
