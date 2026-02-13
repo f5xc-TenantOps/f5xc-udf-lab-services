@@ -323,6 +323,16 @@ def sqs_heartbeat_loop(sqs_url, aws_key, aws_secret, dep_id, lab_id, email, pet)
 # ---------------------------------------------------------------------------
 # CE registration (reactive -- triggered by state_polling_loop)
 # ---------------------------------------------------------------------------
+def _get_latest_site_token():
+    """Read the current site_token from backend state.
+
+    The polling loop continuously updates _backend_state from S3.
+    This ensures we compare against the freshest token, not a stale
+    one captured when the CE registration thread was spawned.
+    """
+    return (_backend_state or {}).get("outputs", {}).get("site_token", "")
+
+
 def _run_ce_registration(site_token):
     """Register the CE device using the site token.
 
@@ -335,6 +345,12 @@ def _run_ce_registration(site_token):
          - Token match  → restart recovery, skip registration
          - Token mismatch → stale/orphaned CE, fail with clear message
          - No token      → fresh CE, proceed with registration
+
+    Important: The site_token arg may be stale (from an old S3 state file
+    that persisted across deployment cycles). We always re-read the latest
+    token from _backend_state at comparison time, since the polling loop
+    will have picked up the fresh token from a new provisioning cycle by
+    the time the CE becomes reachable.
     """
     global _ce_status
     try:
@@ -356,11 +372,19 @@ def _run_ce_registration(site_token):
         current_state = (current.get("state") or "").upper()
         print(f"[INFO] CE reachable — state: {current_state}")
 
+        # Re-read the latest token from backend state. Between thread
+        # start and now, a new provisioning cycle may have completed
+        # with a fresh token replacing the stale one.
+        latest_token = _get_latest_site_token()
+        effective_token = latest_token or site_token
+        if latest_token and latest_token != site_token:
+            print(f"[INFO] Site token updated since thread start — using fresh token")
+
         # Token check is determinative
         try:
             config = get_ce_config(ce_ip)
             ce_token = (config.get("Vpm", {}).get("Token") or "").strip()
-            new_token = (site_token or "").strip()
+            new_token = (effective_token or "").strip()
             print(f"[DEBUG] CE token present: {bool(ce_token)}, "
                   f"new token present: {bool(new_token)}, "
                   f"match: {ce_token == new_token if ce_token else 'n/a'}")
@@ -387,7 +411,7 @@ def _run_ce_registration(site_token):
         # No token on CE (or config unreadable) → register normally
         _ce_status = {"status": "REGISTERING", "ce_ip": ce_ip}
 
-        register_ce(ce_ip, site_token)
+        register_ce(ce_ip, effective_token)
         _ce_status = {"status": "PROVISIONING", "ce_ip": ce_ip}
 
         final_status = poll_ce_until_online(ce_ip)
