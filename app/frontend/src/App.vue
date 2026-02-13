@@ -119,7 +119,7 @@
       <section v-if="hasOutputs" class="card">
         <h2 class="card-title">Outputs</h2>
         <div class="outputs-list">
-          <div v-for="(value, key) in deployStatus.outputs" :key="key" class="output-row">
+          <div v-for="(value, key) in visibleOutputs" :key="key" class="output-row">
             <span class="output-key">{{ formatStatus(key) }}</span>
             <span class="output-value">{{ value }}</span>
           </div>
@@ -234,9 +234,18 @@ const provisioningItems = computed(() => {
   return items
 })
 
+const INTERNAL_OUTPUT_KEYS = ['site_token']
+
+const visibleOutputs = computed(() => {
+  if (!deployStatus.value?.outputs) return {}
+  return Object.fromEntries(
+    Object.entries(deployStatus.value.outputs)
+      .filter(([key]) => !INTERNAL_OUTPUT_KEYS.includes(key))
+  )
+})
+
 const hasOutputs = computed(() => {
-  if (!deployStatus.value || !deployStatus.value.outputs) return false
-  return Object.keys(deployStatus.value.outputs).length > 0
+  return Object.keys(visibleOutputs.value).length > 0
 })
 
 const showCeRow = computed(() => {
