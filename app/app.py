@@ -240,9 +240,19 @@ def state_polling_loop(dep_id, s3_client, state_bucket):
     """
     global _backend_state, _ce_registration_started, _seen_provisioning
 
+    expected_petname = _deployment_state.get("petname") if _deployment_state else None
+
     while True:
         state = poll_backend_state(dep_id, s3_client, state_bucket)
         if state:
+            # Ignore stale S3 state from a previous deployment cycle
+            state_petname = state.get("petname")
+            if expected_petname and state_petname and state_petname != expected_petname:
+                print(f"[INFO] Ignoring stale S3 state "
+                      f"(petname {state_petname} != {expected_petname})")
+                time.sleep(STATE_POLL_INTERVAL)
+                continue
+
             _backend_state = state
             status = (state.get("status") or "").upper()
             print(f"[INFO] Backend state updated: {status or 'unknown'}")
